@@ -14,8 +14,8 @@ import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 
-import { deployEscrowOnChain, callCircuit, getCoinMtIndex, getWalletAvailableCoins, getWalletCoinPublicKey } from './midnight-client';
-import { env } from './env';
+import { deployEscrowOnChain, callCircuit, getCoinMtIndex, getWalletAvailableCoins, getWalletCoinPublicKey } from './midnight-client.js';
+import { env } from './env.js';
 
 const app = express();
 app.use(express.json());

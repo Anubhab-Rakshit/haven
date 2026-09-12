@@ -16,8 +16,8 @@ import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-p
 import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
 import { NodeZkConfigProvider } from '@midnight-ntwrk/midnight-js-node-zk-config-provider';
 
-import { resolveNetwork, getOrCreateWallet, type NetworkConfig, type NetworkId } from './network';
-import { createWallet, persistWalletState, unshieldedToken, type WalletContext } from './wallet';
+import { resolveNetwork, getOrCreateWallet, type NetworkConfig, type NetworkId } from './network.js';
+import { createWallet, persistWalletState, unshieldedToken, type WalletContext } from './wallet.js';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 globalThis.WebSocket = WebSocket as any;
