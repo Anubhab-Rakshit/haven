@@ -16,7 +16,7 @@ services:
     runtime: node
     plan: starter
     rootDir: .
-    buildCommand: npm install && npm run build && npm run compile:escrow
+    buildCommand: npm install && npm run build
     startCommand: node dist/server.js
     healthCheckPath: /api/health
     envVars:
