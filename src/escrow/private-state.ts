@@ -1,4 +1,4 @@
-import type { EscrowRecord, EscrowState } from "./types";
+import type { EscrowState } from "./types";
 
 // ─── Private State Schema ──────────────────────────────────────────────────────
 // Manages the private state of escrows — the sensitive data that never

@@ -25,11 +25,82 @@ import {
     verifyCondition,
     computeEscrowHash,
 } from "./verification";
+import { getDeployedContractAddress } from "../network";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-// ─── In-Memory Escrow Store ────────────────────────────────────────────────────
-// Stores escrow records in memory. In production, this would be Supabase.
+// ─── Supabase Client ──────────────────────────────────────────────────────────
+// Falls back to in-memory Map when Supabase env vars are not configured.
+
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+
+let _supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient | null {
+    if (_supabase) return _supabase;
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+        _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return _supabase;
+    }
+    return null;
+}
+
+// ─── In-Memory Escrow Store (fallback) ─────────────────────────────────────────
 
 const escrowStore = new Map<string, EscrowRecord>();
+
+// ─── Supabase ↔ Type Mapping ──────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToRecord(row: any): EscrowRecord {
+    return {
+        id: row.id,
+        contractAddress: row.contract_address,
+        buyerAddress: row.buyer_address,
+        sellerAddress: row.seller_address,
+        amount: row.amount,
+        condition: row.condition,
+        state: row.state,
+        stateLabel: row.state_label,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        fundedAt: row.funded_at,
+        deliveredAt: row.delivered_at,
+        releasedAt: row.released_at,
+        disputedAt: row.disputed_at,
+        resolvedAt: row.resolved_at,
+        cancelledAt: row.cancelled_at,
+        transactionHash: row.transaction_hash,
+        buyerSecret: row.buyer_secret,
+        sellerSecret: row.seller_secret,
+        salt: row.salt,
+    };
+}
+
+function recordToRow(record: EscrowRecord) {
+    return {
+        id: record.id,
+        contract_address: record.contractAddress,
+        buyer_address: record.buyerAddress,
+        seller_address: record.sellerAddress,
+        amount: record.amount,
+        condition: record.condition,
+        state: record.state,
+        state_label: record.stateLabel,
+        created_at: record.createdAt,
+        updated_at: record.updatedAt,
+        funded_at: record.fundedAt,
+        delivered_at: record.deliveredAt,
+        released_at: record.releasedAt,
+        disputed_at: record.disputedAt,
+        resolved_at: record.resolvedAt,
+        cancelled_at: record.cancelledAt,
+        transaction_hash: record.transactionHash,
+        buyer_secret: record.buyerSecret,
+        seller_secret: record.sellerSecret,
+        salt: record.salt,
+    };
+}
 
 // ─── Deploy Escrow ─────────────────────────────────────────────────────────────
 
@@ -49,7 +120,7 @@ const escrowStore = new Map<string, EscrowRecord>();
  */
 export async function deployEscrow(
     request: CreateEscrowRequest,
-    provider: MidnightProvider,
+    _provider: MidnightProvider,
 ): Promise<EscrowDeploymentResult & { escrowId: string }> {
     // Validate inputs
     const amountCheck = verifyAmount(request.amount);
@@ -68,7 +139,7 @@ export async function deployEscrow(
     const salt = generateSalt();
 
     // Create witnesses
-    const witnesses = createEscrowWitnesses(
+    const _witnesses = createEscrowWitnesses(
         buyerSecret,
         sellerSecret,
         request.amount,
@@ -76,8 +147,7 @@ export async function deployEscrow(
     );
 
     // Deploy contract (this would call the Midnight SDK)
-    // For now, we simulate the deployment
-    const contractAddress = `mn_contract_${Date.now().toString(16)}`;
+    const contractAddress = getDeployedContractAddress() || `mn_contract_${Date.now().toString(16)}`;
     const transactionHash = `mn_tx_${Date.now().toString(16)}`;
 
     // Generate escrow ID
@@ -115,6 +185,12 @@ export async function deployEscrow(
 
     // Store the record
     escrowStore.set(escrowId, record);
+
+    // Also persist to Supabase if configured
+    const sb = getSupabase();
+    if (sb) {
+        await sb.from("escrows").insert(recordToRow(record));
+    }
 
     // Store private state
     const privateState = createInitialPrivateState({
@@ -214,7 +290,7 @@ async function performEscrowAction(
     escrowId: string,
     action: string,
     secret: string,
-    provider: MidnightProvider,
+    _provider: MidnightProvider,
 ): Promise<EscrowActionResult> {
     const record = escrowStore.get(escrowId);
     if (!record) {
@@ -305,6 +381,12 @@ async function performEscrowAction(
 
     escrowStore.set(escrowId, updatedRecord);
 
+    // Sync to Supabase if configured
+    const sb = getSupabase();
+    if (sb) {
+        await sb.from("escrows").update(recordToRow(updatedRecord)).eq("id", escrowId);
+    }
+
     // Update private state
     const privateState = loadPrivateStateMemory(escrowId);
     if (privateState) {
@@ -326,7 +408,26 @@ async function performEscrowAction(
  * Gets an escrow record by ID.
  */
 export function getEscrow(escrowId: string): EscrowRecord | null {
-    return escrowStore.get(escrowId) ?? null;
+    const local = escrowStore.get(escrowId);
+    if (local) return local;
+
+    // Try Supabase (sync fallback: return null if SB, caller should use async version)
+    return null;
+}
+
+/**
+ * Async version that queries Supabase directly.
+ */
+export async function getEscrowAsync(escrowId: string): Promise<EscrowRecord | null> {
+    const local = escrowStore.get(escrowId);
+    if (local) return local;
+
+    const sb = getSupabase();
+    if (sb) {
+        const { data } = await sb.from("escrows").select("*").eq("id", escrowId).single();
+        return data ? rowToRecord(data) : null;
+    }
+    return null;
 }
 
 /**
@@ -360,6 +461,32 @@ export function listEscrows(filters?: {
 }
 
 /**
+ * Async version that queries Supabase directly.
+ */
+export async function listEscrowsAsync(filters?: {
+    state?: EscrowState;
+    buyerAddress?: string;
+    sellerAddress?: string;
+}): Promise<EscrowRecord[]> {
+    const sb = getSupabase();
+    if (sb) {
+        let query = sb.from("escrows").select("*");
+        if (filters?.state !== undefined) {
+            query = query.eq("state", filters.state);
+        }
+        if (filters?.buyerAddress) {
+            query = query.eq("buyer_address", filters.buyerAddress);
+        }
+        if (filters?.sellerAddress) {
+            query = query.eq("seller_address", filters.sellerAddress);
+        }
+        const { data } = await query.order("created_at", { ascending: false });
+        return (data || []).map(rowToRecord);
+    }
+    return listEscrows(filters);
+}
+
+/**
  * Gets the private state for an escrow.
  */
 export function getEscrowPrivateState(escrowId: string) {
@@ -372,6 +499,12 @@ export function getEscrowPrivateState(escrowId: string) {
 export function removeEscrow(escrowId: string): boolean {
     const deleted = escrowStore.delete(escrowId);
     removePrivateStateMemory(escrowId);
+
+    const sb = getSupabase();
+    if (sb) {
+        sb.from("escrows").delete().eq("id", escrowId);
+    }
+
     return deleted;
 }
 
@@ -381,6 +514,11 @@ export function removeEscrow(escrowId: string): boolean {
 export function clearAllEscrows(): void {
     escrowStore.clear();
     clearMemoryState();
+
+    const sb = getSupabase();
+    if (sb) {
+        sb.from("escrows").delete().neq("id", "");
+    }
 }
 
 // ─── Types ─────────────────────────────────────────────────────────────────────

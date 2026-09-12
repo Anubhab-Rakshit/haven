@@ -1,7 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { Buffer } from 'node:buffer';
-import { fileURLToPath } from 'node:url';
 
 import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
@@ -320,4 +319,9 @@ export function recordDeployment(
     [network]: { address, deployer, deployedAt: new Date().toISOString() },
   };
   saveState(next, { cwd });
+}
+
+export function getDeployedContractAddress(network: NetworkId = 'preprod'): string | null {
+  const state = loadState();
+  return state?.deployments?.[network]?.address ?? null;
 }
