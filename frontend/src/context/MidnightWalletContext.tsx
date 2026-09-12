@@ -39,7 +39,7 @@ const STORAGE_KEY = 'haven_wallet_connected';
 const STORAGE_ADDRESS_KEY = 'haven_wallet_address';
 const STORAGE_WALLET_ID_KEY = 'haven_wallet_id';
 const DEMO_KEY = 'haven_wallet_demo_mode';
-const NETWORK_ID = 'midnight-preprod';
+const NETWORK_ID = 'preprod';
 
 function getAvailableWallets(): Array<{ id: string; api: InitialAPI }> {
   if (typeof window === 'undefined' || !window.midnight) return [];
