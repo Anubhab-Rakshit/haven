@@ -12,7 +12,7 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "test:e2e": "tsx tests/e2e-preprod.ts",
-        "server": "tsx src/server.ts",
+        "server": "tsx --env-file=.env.local src/server.ts",
         "lint": "oxlint src/ tests/",
         "typecheck": "tsc --noEmit",
         "frontend:dev": "npm --prefix frontend run dev",

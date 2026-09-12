@@ -11,12 +11,13 @@ import { Footer } from './components/Footer';
 import { EscrowBoard } from './components/EscrowBoard';
 import { ProtocolStatsView } from './components/ProtocolStatsView';
 import { ZKExplorerView } from './components/ZKExplorerView';
+import { AboutHavenView } from './components/AboutHavenView';
 import { CreateEscrowModal } from './components/CreateEscrowModal';
 import { useEscrowService } from './hooks/useEscrowService';
 
 function AppContent() {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [activeView, setActiveView] = useState<'escrows' | 'stats' | 'explorer'>('escrows');
+  const [activeView, setActiveView] = useState<'escrows' | 'stats' | 'explorer' | 'about'>('escrows');
   const [isGlobalCreateOpen, setIsGlobalCreateOpen] = useState(false);
 
   const { escrows, createEscrow } = useEscrowService();
@@ -108,6 +109,22 @@ function AppContent() {
                     style={{ width: '100%' }}
                   >
                     <ZKExplorerView />
+                  </motion.div>
+                )}
+
+                {activeView === 'about' && (
+                  <motion.div
+                    key="about"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                    style={{ width: '100%' }}
+                  >
+                    <AboutHavenView
+                      onEnterHaven={() => setActiveView('escrows')}
+                      onCreateClick={() => setIsGlobalCreateOpen(true)}
+                    />
                   </motion.div>
                 )}
               </AnimatePresence>

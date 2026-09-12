@@ -252,6 +252,12 @@ export async function callCircuit(
 
     // Rebuild the compiled contract with witnesses (same as deploy)
     let compiledContract: any = CompiledContract.make('escrow', (client.Escrow as any).Contract);
+    compiledContract = CompiledContract.withWitnesses<any, any, any>(compiledContract, {
+        buyerSecret: (ctx: any) => [ctx.privateState, toBytes32(ctx.privateState.buyerSecret)],
+        sellerSecret: (ctx: any) => [ctx.privateState, toBytes32(ctx.privateState.sellerSecret)],
+        escrowAmount: (ctx: any) => [ctx.privateState, toBytes32(ctx.privateState.amount)],
+        conditionHash: (ctx: any) => [ctx.privateState, toBytes32(ctx.privateState.condition)],
+    } as any);
     compiledContract = CompiledContract.withCompiledFileAssets<any, any, any>(compiledContract, client.zkConfigPath);
 
     // Call the circuit via submitCallTx — this generates proof, balances, and submits
