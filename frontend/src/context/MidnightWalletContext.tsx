@@ -111,27 +111,50 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const wallets = getAvailableWallets();
+      console.log('[Haven] Starting wallet connect...');
 
-      if (wallets.length === 0) {
+      // Check if window.midnight exists at all
+      if (typeof window === 'undefined') {
+        console.error('[Haven] window is undefined');
+        throw new Error('No Midnight wallet detected.');
+      }
+      console.log('[Haven] window.midnight:', window.midnight);
+
+      if (!window.midnight) {
+        console.error('[Haven] window.midnight is undefined — Lace extension not detected');
         throw new Error(
           'No Midnight wallet detected. Install the Lace browser extension and reload.'
         );
       }
 
-      // Select wallet: use specified id, or if only one wallet, auto-select
+      const walletKeys = Object.keys(window.midnight);
+      console.log('[Haven] Available wallet keys:', walletKeys);
+
+      const wallets = getAvailableWallets();
+      console.log('[Haven] Connectable wallets:', wallets.map(w => `${w.id} (v${w.api.apiVersion})`));
+
+      if (wallets.length === 0) {
+        console.error('[Haven] No wallets with connect() found');
+        throw new Error(
+          'No Midnight wallet detected. Install the Lace browser extension and reload.'
+        );
+      }
+
       let selected = wallets[0];
       if (walletId) {
         const found = wallets.find((w) => w.id === walletId);
         if (found) selected = found;
       }
 
+      console.log(`[Haven] Selected wallet: ${selected.id}, calling connect('${NETWORK_ID}')...`);
+
       let api: ConnectedAPI;
       try {
         api = await selected.api.connect(NETWORK_ID);
+        console.log('[Haven] connect() resolved. API:', api);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        // Lace sometimes has stale channels after unlock — clear and ask user to retry
+        console.error('[Haven] connect() failed:', msg);
         if (msg.includes('shutdown') || msg.includes('no longer be used') || msg.includes('channel')) {
           localStorage.removeItem(STORAGE_KEY);
           localStorage.removeItem(STORAGE_ADDRESS_KEY);
@@ -143,17 +166,21 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
         throw err;
       }
 
-      // Get the shielded address (the private address used for ZK escrows)
+      // Get the shielded address
+      console.log('[Haven] Calling getShieldedAddresses()...');
       let walletAddress: string;
       try {
         const shielded = await api.getShieldedAddresses();
+        console.log('[Haven] Shielded addresses:', shielded);
         walletAddress = shielded.shieldedAddress;
-      } catch {
-        // Some wallets may not support shielded — fall back to unshielded
+      } catch (err: unknown) {
+        console.warn('[Haven] getShieldedAddresses() failed, trying getUnshieldedAddress():', err);
         const unshielded = await api.getUnshieldedAddress();
+        console.log('[Haven] Unshielded address:', unshielded);
         walletAddress = unshielded.unshieldedAddress;
       }
 
+      console.log('[Haven] Wallet connected:', walletAddress);
       setConnectedApi(api);
       setAddress(walletAddress);
       setIsConnected(true);
@@ -162,6 +189,7 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(STORAGE_WALLET_ID_KEY, selected.id);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to connect wallet';
+      console.error('[Haven] Connect error:', message);
       setError(message);
       setIsConnected(false);
       setAddress(null);
@@ -170,6 +198,7 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(STORAGE_ADDRESS_KEY);
     } finally {
       setIsConnecting(false);
+      console.log('[Haven] Connect flow finished');
     }
   }, []);
 
