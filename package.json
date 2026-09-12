@@ -13,6 +13,9 @@
         "test:coverage": "vitest run --coverage",
         "lint": "oxlint src/ tests/",
         "typecheck": "tsc --noEmit",
+        "frontend:dev": "npm --prefix frontend run dev",
+        "frontend:build": "npm --prefix frontend run build",
+        "frontend:test": "npm --prefix frontend run test",
         "compile:escrow": "compact compile contracts/escrow.compact --out-dir artifacts",
         "deploy:escrow": "tsx scripts/deploy.ts",
         "clean": "rm -rf dist artifacts"
