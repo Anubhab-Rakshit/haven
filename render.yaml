@@ -1,0 +1,68 @@
+# Haven — Render Blueprint
+# Deploys the Express API server + Midnight proof server.
+#
+# Setup:
+#   1. Push this repo to GitHub
+#   2. In Render Dashboard → New → Blueprint → connect repo
+#   3. Set env vars (below) in the web service dashboard
+#
+# The proof server runs as its own service on Render.
+# The API server reaches it via MIDNIGHT_PROOF_SERVER_URL.
+
+services:
+  # ── API Server ─────────────────────────────────────────────────────
+  - type: web
+    name: haven-api
+    runtime: node
+    plan: starter
+    rootDir: .
+    buildCommand: npm install && npm run build && npm run compile:escrow
+    startCommand: node dist/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PORT
+        value: 3001
+
+      # Midnight network — set these in Render dashboard
+      - key: MIDNIGHT_NETWORK
+        sync: false
+      - key: MIDNIGHT_INDEXER_URL
+        sync: false
+      - key: MIDNIGHT_INDEXER_WS_URL
+        sync: false
+      - key: MIDNIGHT_NODE_URL
+        sync: false
+      - key: MIDNIGHT_WALLET_SEED
+        sync: false
+
+      # Proof server — internal Render URL (see proof-server service)
+      - key: MIDNIGHT_PROOF_SERVER_URL
+        fromService:
+          name: haven-proof-server
+          type: web
+          property: port
+
+      # Supabase — set these in Render dashboard
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+
+      # Optional
+      - key: PRIVATE_STATE_PASSWORD
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+
+  # ── Proof Server (Midnight ZK prover) ─────────────────────────────
+  - type: web
+    name: haven-proof-server
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile.proof-server
+    envVars:
+      - key: MIDNIGHT_NETWORK
+        value: preprod
+    healthCheckPath: /

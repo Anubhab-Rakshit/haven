@@ -1,0 +1,6 @@
+FROM midnightntwrk/proof-server:latest
+
+EXPOSE 6300
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
+  CMD curl -f http://localhost:6300 || exit 1
