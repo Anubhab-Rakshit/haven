@@ -183,13 +183,19 @@ export function resolveNetwork(opts: ResolveOptions = {}): ResolveResult {
     network = flag;
     source = 'flag';
   } else {
-    const state = loadState({ cwd });
-    if (state) {
-      network = state.activeNetwork;
-      source = 'state';
-    } else {
-      network = 'undeployed';
+    const envNetwork = env.MIDNIGHT_NETWORK;
+    if (envNetwork && isNetworkId(envNetwork)) {
+      network = envNetwork;
       source = 'default';
+    } else {
+      const state = loadState({ cwd });
+      if (state) {
+        network = state.activeNetwork;
+        source = 'state';
+      } else {
+        network = 'undeployed';
+        source = 'default';
+      }
     }
   }
 
