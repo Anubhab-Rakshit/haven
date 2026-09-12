@@ -1,7 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import type { InitialAPI, ConnectedAPI, Configuration } from '@midnight-ntwrk/dapp-connector-api';
 
 export interface MidnightProvider {
   getAddress: () => Promise<string>;
+  getConfiguration: () => Promise<Configuration>;
+  getShieldedAddresses: () => Promise<{ shieldedAddress: string; shieldedCoinPublicKey: string; shieldedEncryptionPublicKey: string }>;
+  getUnshieldedAddress: () => Promise<{ unshieldedAddress: string }>;
   networkId: string;
 }
 
@@ -14,7 +18,8 @@ export interface MidnightWalletState {
   provider: MidnightProvider | null;
   error: string | null;
   isDemoMode: boolean;
-  connect: () => Promise<void>;
+  availableWallets: Array<{ id: string; name: string; icon: string; apiVersion: string }>;
+  connect: (walletId?: string) => Promise<void>;
   disconnect: () => void;
   toggleDemoMode: () => void;
 }
@@ -31,7 +36,29 @@ export function useMidnightWallet(): MidnightWalletState {
 
 const DEMO_BUYER_ADDRESS = 'mn_shielded_19f8a3c82d4e7b1a9c3e5d7f2a1b4c6e8d0f2a4b';
 const STORAGE_KEY = 'haven_wallet_connected';
+const STORAGE_ADDRESS_KEY = 'haven_wallet_address';
+const STORAGE_WALLET_ID_KEY = 'haven_wallet_id';
 const DEMO_KEY = 'haven_wallet_demo_mode';
+const NETWORK_ID = 'midnight-preprod';
+
+function getAvailableWallets(): Array<{ id: string; api: InitialAPI }> {
+  if (typeof window === 'undefined' || !window.midnight) return [];
+  return Object.entries(window.midnight)
+    .filter(([, api]) => api && typeof api.connect === 'function')
+    .map(([id, api]) => ({ id, api }));
+}
+
+function getMidnightWallets(): Array<{ id: string; name: string; icon: string; apiVersion: string }> {
+  if (typeof window === 'undefined' || !window.midnight) return [];
+  return Object.entries(window.midnight)
+    .filter(([, api]) => api && typeof api.connect === 'function')
+    .map(([id, api]) => ({
+      id,
+      name: api.name || id,
+      icon: api.icon || '',
+      apiVersion: api.apiVersion || '',
+    }));
+}
 
 export function MidnightWalletProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState<boolean>(() => {
@@ -39,47 +66,72 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
   });
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [address, setAddress] = useState<string | null>(() => {
-    return localStorage.getItem(STORAGE_KEY) === 'true' ? DEMO_BUYER_ADDRESS : null;
+    if (localStorage.getItem(STORAGE_KEY) === 'true') {
+      return localStorage.getItem(STORAGE_ADDRESS_KEY) || DEMO_BUYER_ADDRESS;
+    }
+    return null;
   });
   const [error, setError] = useState<string | null>(null);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
     return localStorage.getItem(DEMO_KEY) !== 'false';
   });
+  const [availableWallets, setAvailableWallets] = useState<Array<{ id: string; name: string; icon: string; apiVersion: string }>>([]);
+  const [connectedApi, setConnectedApi] = useState<ConnectedAPI | null>(null);
+
+  // Scan for available wallets on mount and periodically
+  useEffect(() => {
+    const scan = () => {
+      setAvailableWallets(getMidnightWallets());
+    };
+    scan();
+    const interval = setInterval(scan, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const shortAddress = address
     ? `${address.slice(0, 11)}...${address.slice(-6)}`
     : null;
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (walletId?: string) => {
     setIsConnecting(true);
     setError(null);
 
     try {
-      // Check for real Lace wallet in window.midnight
-      if (typeof window !== 'undefined' && (window as unknown as { midnight?: { lace?: { connect: (net: string) => Promise<unknown> } } }).midnight?.lace) {
-        try {
-          const lace = (window as unknown as { midnight: { lace: { connect: (net: string) => Promise<{ getAddress: () => Promise<string> }> } } }).midnight.lace;
-          const api = await lace.connect('testnet');
-          const realAddress = await api.getAddress();
-          setAddress(realAddress);
-          setIsConnected(true);
-          localStorage.setItem(STORAGE_KEY, 'true');
-          setIsConnecting(false);
-          return;
-        } catch (err: unknown) {
-          console.warn('Lace wallet connection prompt cancelled or failed, using simulated fallback:', err);
-        }
+      const wallets = getAvailableWallets();
+
+      if (wallets.length === 0) {
+        throw new Error(
+          'No Midnight wallet detected. Install the Lace browser extension and reload.'
+        );
       }
 
-      // Simulated connection delay for smooth UX
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      // Select wallet: use specified id, or if only one wallet, auto-select
+      let selected = wallets[0];
+      if (walletId) {
+        const found = wallets.find((w) => w.id === walletId);
+        if (found) selected = found;
+      }
 
-      setAddress(DEMO_BUYER_ADDRESS);
+      const api = await selected.api.connect(NETWORK_ID);
+
+      // Get the shielded address (the private address used for ZK escrows)
+      const shielded = await api.getShieldedAddresses();
+      const walletAddress = shielded.shieldedAddress;
+
+      setConnectedApi(api);
+      setAddress(walletAddress);
       setIsConnected(true);
       localStorage.setItem(STORAGE_KEY, 'true');
+      localStorage.setItem(STORAGE_ADDRESS_KEY, walletAddress);
+      localStorage.setItem(STORAGE_WALLET_ID_KEY, selected.id);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to connect wallet');
+      const message = err instanceof Error ? err.message : 'Failed to connect wallet';
+      setError(message);
       setIsConnected(false);
+      setAddress(null);
+      setConnectedApi(null);
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_ADDRESS_KEY);
     } finally {
       setIsConnecting(false);
     }
@@ -88,7 +140,10 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(() => {
     setIsConnected(false);
     setAddress(null);
+    setConnectedApi(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_ADDRESS_KEY);
+    localStorage.removeItem(STORAGE_WALLET_ID_KEY);
   }, []);
 
   const toggleDemoMode = useCallback(() => {
@@ -99,6 +154,19 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const provider: MidnightProvider | null = isConnected && connectedApi
+    ? {
+        getAddress: async () => {
+          const shielded = await connectedApi.getShieldedAddresses();
+          return shielded.shieldedAddress;
+        },
+        getConfiguration: () => connectedApi.getConfiguration(),
+        getShieldedAddresses: () => connectedApi.getShieldedAddresses(),
+        getUnshieldedAddress: () => connectedApi.getUnshieldedAddress(),
+        networkId: NETWORK_ID,
+      }
+    : null;
+
   return (
     <MidnightWalletContext.Provider
       value={{
@@ -106,10 +174,11 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
         isConnecting,
         address,
         shortAddress,
-        networkId: 'midnight-preprod',
-        provider: isConnected ? { getAddress: async () => address || DEMO_BUYER_ADDRESS, networkId: 'midnight-preprod' } : null,
+        networkId: NETWORK_ID,
+        provider,
         error,
         isDemoMode,
+        availableWallets,
         connect,
         disconnect,
         toggleDemoMode,

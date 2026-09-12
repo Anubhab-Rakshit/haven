@@ -21,7 +21,7 @@ import {
 type FilterTab = 'all' | 'active' | 'funded' | 'delivered' | 'disputed' | 'completed';
 
 export const EscrowBoard: React.FC = () => {
-  const { isConnected, connect, isConnecting } = useMidnightWallet();
+  const { isConnected, connect, isConnecting, error, availableWallets } = useMidnightWallet();
   const {
     escrows,
     selectedEscrow,
@@ -154,16 +154,69 @@ export const EscrowBoard: React.FC = () => {
             Connect your Midnight wallet to create or verify private escrows.
           </p>
 
-          <Magnetic strength={0.3}>
-            <button
-              type="button"
-              className="btn-outline-gold"
-              onClick={() => connect()}
-              disabled={isConnecting}
+          {/* Error banner */}
+          {error && (
+            <div
+              style={{
+                padding: '0.75rem 1.25rem',
+                borderRadius: '8px',
+                background: 'rgba(255, 80, 80, 0.08)',
+                border: '1px solid rgba(255, 80, 80, 0.25)',
+                color: '#ff6b6b',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                marginBottom: '1rem',
+                maxWidth: '480px',
+                textAlign: 'center',
+              }}
             >
-              <span>{isConnecting ? 'CONNECTING WALLET...' : 'CONNECT WALLET'}</span>
-            </button>
-          </Magnetic>
+              {error}
+            </div>
+          )}
+
+          {/* Wallet selector or connect button */}
+          {availableWallets.length > 1 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', alignItems: 'center' }}>
+              <p
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '10px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                Select a wallet
+              </p>
+              {availableWallets.map((wallet) => (
+                <Magnetic key={wallet.id} strength={0.3}>
+                  <button
+                    type="button"
+                    className="btn-outline-gold"
+                    onClick={() => connect(wallet.id)}
+                    disabled={isConnecting}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}
+                  >
+                    {wallet.icon && (
+                      <img src={wallet.icon} alt="" style={{ width: 20, height: 20, borderRadius: 4 }} />
+                    )}
+                    <span>{isConnecting ? 'CONNECTING...' : `CONNECT ${wallet.name.toUpperCase()}`}</span>
+                  </button>
+                </Magnetic>
+              ))}
+            </div>
+          ) : (
+            <Magnetic strength={0.3}>
+              <button
+                type="button"
+                className="btn-outline-gold"
+                onClick={() => connect()}
+                disabled={isConnecting}
+              >
+                <span>{isConnecting ? 'CONNECTING WALLET...' : 'CONNECT WALLET'}</span>
+              </button>
+            </Magnetic>
+          )}
         </motion.div>
       ) : (
         /* Connected View */
