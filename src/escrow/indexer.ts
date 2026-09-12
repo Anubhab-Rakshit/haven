@@ -66,7 +66,10 @@ export async function fetchEscrowState(
             }),
         });
 
-        const data = await response.json();
+        const data = (await response.json()) as {
+            errors?: unknown[];
+            data?: { contractState?: OnChainEscrowState };
+        };
 
         if (data.errors) {
             console.error("Indexer errors:", data.errors);
@@ -97,7 +100,10 @@ export async function fetchEscrowTransactions(
             }),
         });
 
-        const data = await response.json();
+        const data = (await response.json()) as {
+            errors?: unknown[];
+            data?: { transactions?: EscrowTransaction[] };
+        };
 
         if (data.errors) {
             console.error("Indexer errors:", data.errors);
@@ -126,7 +132,16 @@ export async function fetchLatestBlock(): Promise<{
             body: JSON.stringify({ query: GET_LATEST_BLOCK }),
         });
 
-        const data = await response.json();
+        const data = (await response.json()) as {
+            errors?: unknown[];
+            data?: {
+                blocks?: {
+                    height: number;
+                    hash: string;
+                    timestamp: string;
+                }[];
+            };
+        };
 
         if (data.errors) {
             console.error("Indexer errors:", data.errors);
