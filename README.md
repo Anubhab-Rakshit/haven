@@ -1,229 +1,315 @@
-# Haven
+<div align="center">
 
-Private Escrow, Shielded.
+# 🔐 Haven
 
-## Overview
+### Private, Zero-Knowledge Escrow on the Midnight Blockchain
 
-Haven is a decentralized escrow service built on Midnight Network. It uses zero-knowledge proofs to keep amounts, conditions, and participant identities private while maintaining verifiable state on-chain.
+Shielded amounts · Privacy-preserving escrow — funds held in real shielded tokens,
+transitions proven with ZK circuits, identities never revealed on-chain.
 
-## Features
-
-- **Private Amounts**: Escrow amounts are committed on-chain as ZK hashes
-- **Private Conditions**: Delivery conditions are never revealed publicly
-- **Anonymous Parties**: Buyer and seller identities are hidden behind commitments
-- **Verifiable State**: State transitions are public and verifiable
-- **Dispute Resolution**: Built-in dispute mechanism with selective disclosure
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        FRONTEND                              │
-│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────┐   │
-│  │ EscrowBoard  │  │ Dispute      │  │  Midnight       │   │
-│  │              │  │ Resolution   │  │  Wallet         │   │
-│  └──────┬──────┘  └──────┬───────┘  └──────────┬──────┘   │
-│         │                │                      │           │
-│         └────────────────┼──────────────────────┘           │
-│                          │                                  │
-│                    ┌─────▼─────┐                            │
-│                    │ useEscrow │                            │
-│                    │ Service   │                            │
-│                    └─────┬─────┘                            │
-└──────────────────────────┼──────────────────────────────────┘
-                           │
-              ┌────────────▼────────────┐
-              │   Midnight.js SDK       │
-              │   (ZK Circuit Exec)     │
-              └────────────┬────────────┘
-                           │
-              ┌────────────▼────────────┐
-              │   Midnight Network      │
-              │   (Preprod Testnet)     │
-              └─────────────────────────┘
-```
-
-## Privacy Model
-
-### What an observer can learn
-
-| Data point | Where |
-|------------|-------|
-| Escrow exists | On-chain commitment hashes |
-| Current state | `escrowState` counter |
-| Number of deposits | `depositCount` on-chain |
-| Number of disputes | `disputeCount` on-chain |
-| When actions occurred | Transaction hashes, timestamps |
-
-### What an observer cannot learn
-
-| Data point | Why it stays private |
-|------------|----------------------|
-| Escrow amount | Committed on-chain as hash |
-| Delivery condition | Committed on-chain as hash |
-| Buyer identity | Private witness |
-| Seller identity | Private witness |
-| Specific terms | Never leaves client |
-
-## State Machine
-
-```
-Created ──┬── Funded ──┬── Delivered ──┬── Released
-           │            │                │
-           │            └── Disputed ── Resolved
-           │
-           └── Cancelled
-```
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 22+
-- npm 10+
-- Compact CLI 0.5+
-- Lace Wallet (browser extension)
-- Supabase account (for persistence)
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/Anubhab-Rakshit/haven.git
-cd haven
-
-# Install dependencies
-npm install
-
-# Compile the contract
-npm run compile:escrow
-```
-
-### Supabase Setup (optional, for persistence)
-
-```bash
-# 1. Create a project at https://supabase.com
-# 2. Run supabase/schema.sql in the SQL Editor
-# 3. Copy the env file and fill in your values
-cp .env.supabase.example .env.local
-# Edit .env.local with your Supabase URL and anon key
-```
-
-When `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set, escrow records persist across restarts. Without them, data lives in memory (resets on restart).
-
-### Development
-
-```bash
-# Run tests
-npm test
-
-# Run type checker
-npm run typecheck
-
-# Run linter
-npm run lint
-
-# Run E2E test (requires proof server + funded wallet)
-npm run test:e2e
-
-# Run frontend
-npm run frontend:dev
-
-# Build frontend
-npm run frontend:build
-```
-
-### Deployment
-
-```bash
-# Deploy to local devnet
-npm run deploy:escrow -- --network undeployed
-
-# Deploy to preprod
-npm run deploy:escrow -- --network preprod
-```
-
-### Deployed Contract (Preprod)
-
-| Field | Value |
-|-------|-------|
-| Contract Address | `c1948db2a7c3a8b9c632ddfe1b9a164daa2f6e19b707bc06f4b2d5f93576bf7b` |
-| Transaction | `c6a03985a33af45525fb0c3689bfb2ad979696b4df55c98e188d1f971e05898f` |
-| Buyer Secret | `3f08d9865e1e44b1ad1c3f4451daa6ef` |
-| Seller Secret | `0e008e2c6d5042c390d4bcb6efadc6b9` |
-
-### E2E Integration Test
-
-```bash
-# Start proof server
-docker compose up -d
-
-# Run the E2E test against preprod
-npm run test:e2e
-```
-
-## API Reference
-
-### Service Functions
-
-```typescript
-import { deployEscrow, depositFunds, confirmDelivery, releaseFunds } from './src/escrow';
-
-// Deploy a new escrow
-const result = await deployEscrow({
-    buyerAddress: 'mn_buyer_1',
-    sellerAddress: 'mn_seller_1',
-    amount: '1000',
-    condition: 'Deliver 10 units of product X'
-}, provider);
-
-// Deposit funds
-await depositFunds(result.escrowId, buyerSecret, provider);
-
-// Confirm delivery
-await confirmDelivery(result.escrowId, sellerSecret, provider);
-
-// Release funds
-await releaseFunds(result.escrowId, buyerSecret, provider);
-```
-
-### Verification Functions
-
-```typescript
-import { verifyStateTransition, verifyAmount, verifyCondition } from './src/escrow';
-
-// Verify a state transition is valid
-const transition = verifyStateTransition(EscrowState.Created, EscrowState.Funded);
-console.log(transition.valid); // true
-
-// Verify an amount is valid
-const amount = verifyAmount('1000');
-console.log(amount.valid); // true
-
-// Verify a condition is valid
-const condition = verifyCondition('Deliver goods');
-console.log(condition.valid); // true
-```
-
-## Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run specific test file
-npx vitest run tests/service.test.ts
-
-# Run with coverage
-npm run test:coverage
-```
-
-## License
-
-Apache-2.0
+</div>
 
 ---
 
-**Haven** · Midnight Buildathon 2026
+<table>
+<tr>
+<td>
 
-*Built with ❤️ by [Anubhab Rakshit](https://github.com/Anubhab-Rakshit)*
+## 📍 Stack
+
+</td>
+<td>
+
+[![Midnight](https://img.shields.io/badge/Midnight%20Compact-0.23-6a5acd?style=flat-square)](https://midnight.network)
+[![Zero-Knowledge](https://img.shields.io/badge/Zero--Knowledge%20Proofs-Compact-9b59b6?style=flat-square)](#-privacy-model)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?style=flat-square&logo=typescript&logoColor=white)]()
+[![Node.js](https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=node.js&logoColor=white)]()
+[![Express](https://img.shields.io/badge/Express-5.x-000?style=flat-square&logo=express&logoColor=white)]()
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=white)]()
+[![Vite](https://img.shields.io/badge/Vite-6-646CFF?style=flat-square&logo=vite&logoColor=white)]()
+[![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=white)]()
+[![Zig](https://img.shields.io/badge/Zig-%23F7A41D?style=flat-square&logo=zig&logoColor=white)]()
+
+</td>
+</tr>
+</table>
+
+---
+
+## 📑 Contents
+
+- [Features](#-features)
+- [How It Works](#-how-it-works)
+- [Privacy Model](#-privacy-model)
+- [State Machine](#-state-machine)
+- [Architecture](#-architecture)
+- [Project Layout](#-project-layout)
+- [API Reference](#-api-reference)
+- [Getting Started](#-getting-started)
+- [Configuration](#-configuration)
+- [Testing](#-testing)
+- [Deployment](#-deployment)
+- [Security & Disclaimer](#-security--disclaimer)
+
+---
+
+## ✨ Features
+
+| Feature | What it means |
+|---------|---------------|
+| 🔒 **Real shielded escrow** | Funds are minted as shielded Midnight tokens held *by the contract itself* — not a mock balance |
+| 🧾 **Zero-knowledge circuits** | Every state transition is proven with a Compact circuit and verified on-chain |
+| 🛡️ **Private by default** | Amounts, conditions, and identities are committed as hashes; observers see only public state counters |
+| ⚖️ **Built-in dispute lifecycle** | `dispute → resolve` with a full state machine, gated by the right private keys |
+| 🔁 **Restart-safe** | Each deposit's Merkle coin index is persisted, so `release` works after a server restart |
+| 🗄️ **Supabase persistence** | Escrow records, their state, and their on-chain coin index outlive the process |
+| 🖥️ **Frontend dashboard** | Vite + React UI over a typed Express API |
+
+---
+
+## 🧠 How It Works
+
+Haven deploys an on-chain **escrow contract** (Compact) that acts as the shielded
+custodian. Rather than a trivial "flip a boolean", the contract **mints and holds
+a real shielded token** representing the escrowed amount:
+
+1. **Deploy** — buyer deploys the escrow; amount/condition/side identities are
+   committed as hashes. Nothing sensitive is revealed.
+2. **Deposit (mint)** — the buyer's circuit mints a shielded coin of `value` to
+   the contract. The minted coin's Merkle-tree index (`mt_index`) is read back
+   from the indexer and **persisted**, so the coin can be spent later.
+3. **Confirm delivery** — the seller proves delivery; state → `Delivered`.
+4. **Release** — the buyer's circuit spends the *same* shielded coin, sending it
+   to the seller's shielded coin key. The contract's Merkle-tree index is used
+   (persisted), removing the need to pass it from the frontend.
+5. **Cancel / Dispute / Resolve** — covered by the state machine below.
+
+### Why `mt_index` matters and how it's handled
+
+Shielded coins live in a Merkle tree; spending a coin requires proving its
+position (`mt_index`). When the contract *mints* a coin, the index is assigned
+by the network only after the deposit transaction confirms. Haven resolves this
+from the **indexer** on deposit, then **persists it** to Supabase — so
+`release`/`cancel` work across server restarts without hardcoding anything.
+
+---
+
+## 🕶️ Privacy Model
+
+Everything sensitive is a **commitment** (ZK hash) — only its shadow touches the
+ledger.
+
+| On-chain (public) | Kept private |
+|-------------------|--------------|
+| Escrow state counter | Escrow **amount** |
+| Number of deposits / disputes | **Delivery condition** |
+| Party **commitments** (hashes) | Party **identities** |
+| Public transaction hashes | Commercial **terms** |
+
+---
+
+## ⚙️ State Machine
+
+```
+Created ──deposit──▶ Funded ──confirmDelivery──▶ Delivered ──release──▶ Released
+   │                    │                            │
+   │                    └──dispute──▶ Disputed ──resolve──▶ Resolved
+   │                                                   
+   └──cancel──▶ Cancelled   (also available from Funded)
+```
+
+| From | Circuit | To | Authorized by |
+|------|---------|----|---------------|
+| Created | `deposit` (mint) | Funded | buyer secret |
+| Funded | `confirmDelivery` | Delivered | seller secret |
+| Delivered | `release` (spend coin) | Released | buyer secret + seller pub key |
+| Created/Funded | `cancel` (spend coin) | Cancelled | buyer secret |
+| Funded/Delivered | `dispute` | Disputed | buyer **or** seller |
+| Disputed | `resolve` | Resolved | seller-or-buyer (arbiter) secret |
+
+---
+
+## 🏗️ Architecture
+
+```
+┌──────────────────────────┐        ┌──────────────────────────────┐
+│      React + Vite         │        │  Express API server          │
+│  (frontend / :5173)      │        │  (src/server.ts / :3001)     │
+│                          │  HTTP   │                              │
+│  Escrow dashboard UI     │──────▶  │  action handlers             │
+└──────────────────────────┘        │  circuit orchestration       │
+                                    └──────────────┬───────────────┘
+                                                   │ midnight-js
+                                    ┌──────────────▼───────────────┐
+                                    │  Wallet (midnight.js)         │
+                                    │  • balance/submit transactions│
+                                    │  • shield coins to contracts  │
+                                    └──────┬──────────────┬─────────┘
+                                           │              │
+                              ┌────────────▼──┐   ┌───────▼──────────┐
+                              │  Indexer      │   │  Proof server    │
+                              │  (GQL events) │   │  (ZK proofs)     │
+                              └───────────────┘   └──────────────────┘
+                                           │
+                              ┌────────────▼──────────┐
+                              │  Supabase              │
+                              │  escrows + coin index  │
+                              └───────────────────────┘
+```
+
+---
+
+## 📁 Project Layout
+
+```
+haven/
+├── contracts/              # Compact escrow source + compiled artifacts
+├── src/
+│   ├── server.ts           # Express API + action orchestration
+│   ├── midnight-client.ts  # wallet + circuit orchestration
+│   └── network.ts          # network config / client bootstrap
+├── frontend/               # Vite + React dashboard (:5173)
+├── supabase/schema.sql     # DB schema
+└── package.json
+```
+
+---
+
+## 🔌 API Reference
+
+Base URL: `http://localhost:3001`
+
+| Endpoint | Method | Body |
+|----------|--------|------|
+| `/api/health` | GET | — |
+| `/api/escrows` | GET | `?buyerAddress=` |
+| `/api/escrows` | POST | `{ buyerAddress, sellerAddress, amount, condition }` |
+| `/api/escrows/:id/action` | POST | `{ action: 'deposit', value }` |
+| `/api/escrows/:id/action` | POST | `{ action: 'confirmDelivery' }` |
+| `/api/escrows/:id/action` | POST | `{ action: 'release', sellerPubKey }` |
+| `/api/escrows/:id/action` | POST | `{ action: 'cancel' }` |
+| `/api/escrows/:id/action` | POST | `{ action: 'dispute' }` |
+| `/api/escrows/:id/action` | POST | `{ action: 'resolve' }` |
+| `/api/wallet/public-key` | GET | — |
+
+> **Note:** `release`/`cancel` automatically use the persisted `deposit_coin_index`
+> — the frontend no longer needs to send the Merkle index.
+
+```sh
+# Deploy
+curl -X POST http://localhost:3001/api/escrows \
+  -H "Content-Type: application/json" \
+  -d '{"buyerAddress":"tz1buyer","sellerAddress":"tz1seller","amount":"1000","condition":"deliver-goods"}'
+
+# Deposit (mints a shielded coin + persists its index)
+curl -X POST http://localhost:3001/api/escrows/<id>/action \
+  -H "Content-Type: application/json" \
+  -d '{"action":"deposit","value":"1000"}'
+
+# Confirm delivery
+curl -X POST http://localhost:3001/api/escrows/<id>/action \
+  -H "Content-Type: application/json" \
+  -d '{"action":"confirmDelivery"}'
+
+# Release (uses persisted coin index)
+curl -X POST http://localhost:3001/api/escrows/<id>/action \
+  -H "Content-Type: application/json" \
+  -d '{"action":"release","sellerPubKey":"<32-byte shield key hex>"}'
+```
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org) 22+
+- [npm](https://www.npmjs.com) 10+
+- A funded [Midnight](https://midnight.network) wallet (preprod testnet)
+- A running proof server (Midnight Compact developer stack)
+
+### Install
+
+```bash
+git clone https://github.com/Anubhab-Rakshit/haven.git
+cd haven
+npm install
+npm run dev        # API on :3001
+npm run frontend   # dashboard on :5173
+```
+
+### Supabase (persistence)
+
+Create a Supabase project Secretory, run `supabase/schema.sql` in the SQL editor,
+then **one** line to enable restart-safe coin release:
+
+```sql
+ALTER TABLE escrows ADD COLUMN deposit_coin_index BIGINT;
+```
+
+---
+
+## ⚙️ Configuration
+
+Environment variables are loaded from `.env.local`:
+
+```dotenv
+# Midnight network
+MIDNIGHT_NETWORK=preprod
+MIDNIGHT_INDEXER_URL=https://indexer.preprod.midnight.network
+MIDNIGHT_PROOF_SERVER_URL=http://127.0.0.1:6300
+
+# Wallet
+MIDNIGHT_WALLET_SEED=<32-byte hex>
+
+# Supabase (optional — persistence across restarts)
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_ANON_KEY=<anon key>
+```
+
+---
+
+## ✅ Testing
+
+```bash
+npm run typecheck   # TypeScript
+npm run lint        # oxlint
+```
+
+---
+
+## 🧪 Demo / Verification
+
+A full end-to-end happy path (deploy → deposit → confirm → release) was verified
+on the **preprod testnet**: each escrow objects a `Deposited → Delivered →
+Released` transition with a persisted on-chain coin index. See
+[`tests/`](tests/) for the circuit-level verification helpers.
+
+---
+
+## ⚠️ Security & Disclaimer
+
+**Hackathon project** — not audited, not for production. Secrets are handled
+server-side for demo simplicity; a real deployment would keep buyer/seller
+secrets exclusively in the edge wallet. Proof generation requires a trusted
+Midnight proof server.
+
+---
+
+## 🗓️ Roadmap
+
+- [x] Shielded-on-chain escrow (real token custody)
+- [x] Restart-safe coin release (persisted `mt_index`)
+- [x] Full state machine: deposit/confirm/release/cancel/dispute/resolve
+- [ ] Trustless arbitration UI
+- [ ] Multi-signature governance
+- [ ] Frontend release with wallet-side key selection
+
+---
+
+<div align="center">
+
+Built during the **Midnight Buildathon** · [Anubhab Rakshit](https://github.com/Anubhab-Rakshit)
+
+</div>
+</content>

@@ -47,6 +47,9 @@
         "typescript": "^6.0.3",
         "vitest": "^4.1.11"
     },
+    "overrides": {
+        "@midnight-ntwrk/onchain-runtime-v3": "3.0.0"
+    },
     "engines": {
         "node": ">=22.0.0"
     },

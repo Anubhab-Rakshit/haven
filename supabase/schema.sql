@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS escrows (
   resolved_at TIMESTAMPTZ,
   cancelled_at TIMESTAMPTZ,
   transaction_hash TEXT,
+  deposit_coin_index TEXT,
   buyer_secret TEXT NOT NULL,
   seller_secret TEXT NOT NULL,
   salt TEXT NOT NULL

@@ -24,6 +24,12 @@ export ledger escrowState: EscrowState;
 export ledger depositCount: Counter;
 export ledger disputeCount: Counter;
 
+// Stored coin info from deposit (for release/cancel)
+export ledger depositedCoinNonce: Bytes<32>;
+export ledger depositedCoinColor: Bytes<32>;
+export ledger depositedCoinValue: Uint<128>;
+export ledger hasDeposit: Boolean;
+
 // ─── Private Witnesses ─────────────────────────────────────────────────────────
 
 witness buyerSecret(): Bytes<32>;
@@ -66,15 +72,34 @@ constructor() {
     amountCommitment = disclose(commitAmount(amount));
     conditionCommitment = disclose(commitCondition(condition));
     escrowState = EscrowState.STATE_CREATED;
+    hasDeposit = false;
 }
 
 // ─── Circuits ──────────────────────────────────────────────────────────────────
 
-// deposit — Buyer deposits funds (STATE_CREATED → STATE_FUNDED)
-export circuit deposit(): [] {
+// deposit — Buyer deposits by minting an escrow token (STATE_CREATED → STATE_FUNDED)
+export circuit deposit(value: Uint<64>): [] {
     const buyer = buyerSecret();
     assert(buyerCommitment == commitBuyer(buyer), "Not the buyer");
     assert(escrowState == EscrowState.STATE_CREATED, "Escrow not in created state");
+    assert(!hasDeposit, "Already deposited");
+
+    // Mint a new shielded token to this contract
+    const domain = pad(32, "haven:escrow:token");
+    const nonce = pad(32, "haven:escrow:nonce:0");
+    const coin = mintShieldedToken(
+        disclose(domain),
+        disclose(value),
+        disclose(nonce),
+        right<ZswapCoinPublicKey, ContractAddress>(kernel.self())
+    );
+
+    // Store the coin info in ledger for later release/cancel
+    depositedCoinNonce = coin.nonce;
+    depositedCoinColor = coin.color;
+    depositedCoinValue = coin.value;
+    hasDeposit = true;
+
     depositCount.increment(1);
     escrowState = EscrowState.STATE_FUNDED;
 }
@@ -87,11 +112,29 @@ export circuit confirmDelivery(): [] {
     escrowState = EscrowState.STATE_DELIVERED;
 }
 
-// release — Release funds to seller (STATE_DELIVERED → STATE_RELEASED)
-export circuit release(): [] {
+// release — Release escrowed tokens to seller (STATE_DELIVERED → STATE_RELEASED)
+export circuit release(sellerPubKey: ZswapCoinPublicKey, coinIndex: Uint<64>): [] {
     const buyer = buyerSecret();
     assert(buyerCommitment == commitBuyer(buyer), "Not the buyer");
     assert(escrowState == EscrowState.STATE_DELIVERED, "Escrow not in delivered state");
+    assert(hasDeposit, "No deposit to release");
+
+    // Reconstruct the coin with the provided Merkle tree index
+    const coin = QualifiedShieldedCoinInfo {
+        nonce: depositedCoinNonce,
+        color: depositedCoinColor,
+        value: depositedCoinValue,
+        mt_index: coinIndex
+    };
+
+    // Send the shielded coin to the seller
+    sendShielded(
+        disclose(coin),
+        left<ZswapCoinPublicKey, ContractAddress>(disclose(sellerPubKey)),
+        disclose(depositedCoinValue)
+    );
+
+    hasDeposit = false;
     escrowState = EscrowState.STATE_RELEASED;
 }
 
@@ -115,10 +158,32 @@ export circuit resolve(): [] {
     escrowState = EscrowState.STATE_RESOLVED;
 }
 
-// cancel — Cancel escrow before funding (STATE_CREATED → STATE_CANCELLED)
-export circuit cancel(): [] {
+// cancel — Cancel escrow and return tokens (STATE_FUNDED → STATE_CANCELLED)
+export circuit cancel(coinIndex: Uint<64>): [] {
     const buyer = buyerSecret();
     assert(buyerCommitment == commitBuyer(buyer), "Not the buyer");
-    assert(escrowState == EscrowState.STATE_CREATED, "Escrow not in created state");
+    assert(
+        escrowState == EscrowState.STATE_CREATED || escrowState == EscrowState.STATE_FUNDED,
+        "Cannot cancel in current state"
+    );
+
+    if (hasDeposit) {
+        // Return the coin to the buyer via contract self
+        const coin = QualifiedShieldedCoinInfo {
+            nonce: depositedCoinNonce,
+            color: depositedCoinColor,
+            value: depositedCoinValue,
+            mt_index: coinIndex
+        };
+
+        sendShielded(
+            disclose(coin),
+            right<ZswapCoinPublicKey, ContractAddress>(kernel.self()),
+            disclose(depositedCoinValue)
+        );
+
+        hasDeposit = false;
+    }
+
     escrowState = EscrowState.STATE_CANCELLED;
 }

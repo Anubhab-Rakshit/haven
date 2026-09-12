@@ -143,6 +143,108 @@ export async function getMidnightClient(): Promise<MidnightClient> {
     return _client;
 }
 
+// ─── Get Wallet Coin Info ────────────────────────────────────────────────────
+
+export interface WalletCoinInfo {
+    nonce: Uint8Array;
+    color: Uint8Array;
+    value: bigint;
+    mtIndex: bigint;
+}
+
+export async function getWalletAvailableCoins(): Promise<WalletCoinInfo[]> {
+    const client = await getMidnightClient();
+
+    const dustState = await Rx.firstValueFrom(client.wallet.wallet.state().pipe(Rx.filter((s) => s.isSynced)));
+    const availableCoins = dustState.shielded.availableCoins;
+
+    return availableCoins.map((coin: any) => ({
+        nonce: coin.coin.nonce,
+        color: coin.coin.type,
+        value: coin.coin.value,
+        mtIndex: coin.coin.mt_index,
+    }));
+}
+
+export function getWalletCoinPublicKey(): string {
+    const client = _client;
+    if (!client) throw new Error('Client not initialized');
+    return client.wallet.shieldedSecretKeys.coinPublicKey;
+}
+
+// ─── Get Coin MtIndex from Indexer ────────────────────────────────────────────
+
+/**
+ * Query the active network's indexer for a deposit transaction's
+ * ZswapOutput event and return its Merkle-tree index (mt_index).
+ *
+ * @param txHash   The transaction hash of the deposit
+ * @param contractAddress  The contract address to match the ZswapOutput
+ * @returns The mt_index as bigint
+ */
+export async function getCoinMtIndex(
+    txHash: string,
+    contractAddress: string,
+): Promise<bigint> {
+    const ledger = await import('@midnight-ntwrk/ledger-v8');
+    const client = await getMidnightClient();
+    const indexerUrl = client.networkConfig.indexer;
+
+    // Query the indexer for the transaction's zswap ledger events
+    const query = `{
+        transactions(offset: {hash: "${txHash}"}) {
+            hash
+            zswapLedgerEvents {
+                id
+                raw
+            }
+        }
+    }`;
+
+    const resp = await fetch(indexerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+    });
+
+    if (!resp.ok) {
+        throw new Error(`Indexer query failed: ${resp.status} ${resp.statusText}`);
+    }
+
+    const json = (await resp.json()) as { data?: { transactions?: Array<{ zswapLedgerEvents?: Array<{ raw: string }> }> } };
+    const txs = json.data?.transactions;
+    if (!txs || txs.length === 0) {
+        throw new Error(`Transaction ${txHash} not found in indexer`);
+    }
+
+    const events = txs[0].zswapLedgerEvents;
+    if (!events || events.length === 0) {
+        throw new Error(`No zswap ledger events found for transaction ${txHash}`);
+    }
+
+    // Decode each event and find the ZswapOutput for our contract
+    for (const event of events) {
+        const rawHex = event.raw;
+        const bytes = Uint8Array.from(Buffer.from(rawHex, 'hex'));
+        const decoded = ledger.Event.deserialize(bytes);
+
+        // Access the decoded event — use toString() and parse, or access properties
+        const eventStr = decoded.toString();
+
+        // Look for ZswapOutput with our contract address
+        if (eventStr.includes('ZswapOutput') && eventStr.includes(contractAddress.toLowerCase())) {
+            // Extract mt_index from the toString output
+            // Format: "mt_index: NNNNN"
+            const match = eventStr.match(/mt_index:\s*(\d+)/);
+            if (match) {
+                return BigInt(match[1]);
+            }
+        }
+    }
+
+    throw new Error(`No matching ZswapOutput event found for contract ${contractAddress}`);
+}
+
 // ─── Deploy Escrow ────────────────────────────────────────────────────────────
 
 export interface DeployResult {
@@ -244,6 +346,7 @@ export interface CircuitResult {
 export async function callCircuit(
     contractAddress: string,
     circuitName: string,
+    args: unknown[] = [],
     privateStateId: string = PRIVATE_STATE_ID,
 ): Promise<CircuitResult> {
     const client = await getMidnightClient();
@@ -251,6 +354,7 @@ export async function callCircuit(
     console.log(`[Midnight] Calling ${circuitName} on ${contractAddress.slice(0, 20)}...`);
 
     // Rebuild the compiled contract with witnesses (same as deploy)
+    // The generated contract code destructures witness returns as [nextPrivateState, result]
     let compiledContract: any = CompiledContract.make('escrow', (client.Escrow as any).Contract);
     compiledContract = CompiledContract.withWitnesses<any, any, any>(compiledContract, {
         buyerSecret: (ctx: any) => [ctx.privateState, toBytes32(ctx.privateState.buyerSecret)],
@@ -265,12 +369,13 @@ export async function callCircuit(
         compiledContract,
         contractAddress,
         circuitId: circuitName,
-        args: [],
+        args,
         privateStateId,
     });
 
-    const txHash = (result as any).txHash || `mn_tx_${circuitName}_${Date.now().toString(16)}`;
-    const blockHeight = (result as any).blockHeight || Math.floor(Math.random() * 1000000);
+    const publicData = (result as any).public || result;
+    const txHash = publicData.txHash || `mn_tx_${circuitName}_${Date.now().toString(16)}`;
+    const blockHeight = publicData.blockHeight || 0;
 
     console.log(`[Midnight] Circuit ${circuitName} called, tx: ${txHash}`);
 

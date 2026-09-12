@@ -14,7 +14,7 @@ import express from 'express';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 
-import { deployEscrowOnChain, callCircuit } from './midnight-client';
+import { deployEscrowOnChain, callCircuit, getCoinMtIndex, getWalletAvailableCoins, getWalletCoinPublicKey } from './midnight-client';
 import { env } from './env';
 
 const app = express();
@@ -61,6 +61,7 @@ function recordToRow(record: any) {
         resolved_at: record.resolvedAt,
         cancelled_at: record.cancelledAt,
         transaction_hash: record.transactionHash,
+        deposit_coin_index: record.depositCoinIndex,
         buyer_secret: record.buyerSecret,
         seller_secret: record.sellerSecret,
         salt: record.salt,
@@ -87,6 +88,7 @@ function rowToRecord(row: any) {
         resolvedAt: row.resolved_at,
         cancelledAt: row.cancelled_at,
         transactionHash: row.transaction_hash,
+        depositCoinIndex: row.deposit_coin_index,
         buyerSecret: row.buyer_secret,
         sellerSecret: row.seller_secret,
         salt: row.salt,
@@ -122,10 +124,38 @@ const VALID_TRANSITIONS: Record<string, Record<number, number>> = {
     resolve: { [STATE_DISPUTED]: STATE_RESOLVED },
 };
 
+// In-memory store of deposited coin mt_index per escrow id (survives API calls,
+// used when the deposit_coin_index column is unavailable in the DB).
+const depositCoinIndexStore = new Map<string, string>();
+
 // ─── Health ───────────────────────────────────────────────────────────────────
 
 app.get('/api/health', (_req, res) => {
     res.json({ ok: true, timestamp: new Date().toISOString() });
+});
+
+// ─── Wallet Info ──────────────────────────────────────────────────────────────
+
+app.get('/api/wallet/coins', async (_req, res) => {
+    try {
+        const coins = await getWalletAvailableCoins();
+        res.json(coins);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to get coins';
+        console.error('[API] Get coins error:', message);
+        res.status(500).json({ error: message });
+    }
+});
+
+app.get('/api/wallet/public-key', async (_req, res) => {
+    try {
+        const pubKey = getWalletCoinPublicKey();
+        res.json({ publicKey: pubKey });
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to get public key';
+        console.error('[API] Get public key error:', message);
+        res.status(500).json({ error: message });
+    }
 });
 
 // ─── Deploy Escrow ────────────────────────────────────────────────────────────
@@ -173,6 +203,7 @@ app.post('/api/escrows', async (req, res) => {
             resolvedAt: null,
             cancelledAt: null,
             transactionHash: deployResult.transactionHash,
+            depositCoinIndex: null,
             buyerSecret: deployResult.buyerSecret,
             sellerSecret: deployResult.sellerSecret,
             salt: '',
@@ -181,7 +212,14 @@ app.post('/api/escrows', async (req, res) => {
         // Persist to Supabase
         const sb = getSupabase();
         if (sb) {
-            const { error } = await sb.from('escrows').insert(recordToRow(escrowRecord));
+            const insertRow = recordToRow(escrowRecord);
+            let { error } = await sb.from('escrows').insert(insertRow);
+            if (error && /column.*deposit_coin_index/i.test(error.message)) {
+                // Column missing in DB — retry without it
+                const { deposit_coin_index: _drop, ...baseRow } = insertRow;
+                void _drop;
+                ({ error } = await sb.from('escrows').insert(baseRow));
+            }
             if (error) console.error('[API] Supabase insert failed:', error.message);
         }
 
@@ -238,8 +276,49 @@ app.post('/api/escrows/:id/action', async (req, res) => {
         const newState = transition[currentState];
         console.log(`[API] Action ${action} on ${id}: ${STATE_LABELS[currentState]} → ${STATE_LABELS[newState]}`);
 
+        // Build circuit arguments based on action
+        const circuitArgs: unknown[] = [];
+        let depositCoinIndex: string | null = null;
+
+        if (action === 'deposit') {
+            const { value } = req.body;
+            if (value === undefined) {
+                res.status(400).json({ error: 'Missing value for deposit' });
+                return;
+            }
+            circuitArgs.push(BigInt(value));
+        } else if (action === 'release') {
+            const { sellerPubKey } = req.body;
+            if (!sellerPubKey) {
+                res.status(400).json({ error: 'Missing sellerPubKey for release' });
+                return;
+            }
+            const coinIndex = row.deposit_coin_index ?? depositCoinIndexStore.get(id);
+            if (!coinIndex) {
+                res.status(400).json({ error: 'No deposit coin index — deposit first' });
+                return;
+            }
+            circuitArgs.push({ bytes: Uint8Array.from(Buffer.from(sellerPubKey, 'hex')) });
+            circuitArgs.push(BigInt(coinIndex));
+        } else if (action === 'cancel') {
+            const coinIndex = row.deposit_coin_index ?? depositCoinIndexStore.get(id);
+            circuitArgs.push(BigInt(coinIndex ?? 0));
+        }
+
         // Call the circuit on-chain
-        const circuitResult = await callCircuit(row.contract_address, action);
+        const circuitResult = await callCircuit(row.contract_address, action, circuitArgs);
+
+        // After deposit: look up the minted coin's mt_index from the indexer
+        if (action === 'deposit') {
+            try {
+                const coinIdx = await getCoinMtIndex(circuitResult.transactionHash, row.contract_address);
+                depositCoinIndex = coinIdx.toString();
+                depositCoinIndexStore.set(id, depositCoinIndex);
+                console.log(`[API] Deposit coin mt_index: ${depositCoinIndex}`);
+            } catch (err: unknown) {
+                console.error('[API] Failed to lookup coin mt_index:', err instanceof Error ? err.message : err);
+            }
+        }
 
         // Update Supabase
         const now = new Date().toISOString();
@@ -255,12 +334,26 @@ app.post('/api/escrows/:id/action', async (req, res) => {
             ...(action === 'dispute' && { disputed_at: now }),
             ...(action === 'resolve' && { resolved_at: now }),
             ...(action === 'cancel' && { cancelled_at: now }),
+            ...(depositCoinIndex !== null && { deposit_coin_index: depositCoinIndex }),
         };
 
-        const { error: updateError } = await sb
+        let updateError: { message: string } | null = null;
+        const { error: err1 } = await sb
             .from('escrows')
             .update(updatedRow)
             .eq('id', id);
+        updateError = err1;
+
+        if (updateError && /column.*deposit_coin_index/i.test(updateError.message)) {
+            // Column missing in DB — retry without the coin index so state still persists
+            const { deposit_coin_index: _drop, ...baseRow } = updatedRow;
+            void _drop;
+            const { error: err2 } = await sb
+                .from('escrows')
+                .update(baseRow)
+                .eq('id', id);
+            updateError = err2;
+        }
 
         if (updateError) console.error('[API] Supabase update failed:', updateError.message);
 
