@@ -2,7 +2,7 @@ import React from 'react';
 import { EscrowRecord, EscrowState } from '../types/escrow';
 import { PrivacyToggle } from './PrivacyToggle';
 import { StateTimeline } from './StateTimeline';
-import { ArrowUpRight, Clock } from 'lucide-react';
+import { ArrowUpRight, Clock, ShieldCheck, Lock, FileText, ArrowRight, UserCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface EscrowCardProps {
@@ -43,6 +43,20 @@ export const EscrowCard: React.FC<EscrowCardProps> = ({
     }
   };
 
+  const getStatusColor = () => {
+    switch (escrow.state) {
+      case EscrowState.Funded:
+      case EscrowState.Released:
+        return 'var(--accent-emerald)';
+      case EscrowState.Delivered:
+        return '#a78bfa';
+      case EscrowState.Disputed:
+        return 'var(--accent-crimson)';
+      default:
+        return 'var(--accent-gold)';
+    }
+  };
+
   return (
     <motion.div
       layout
@@ -53,60 +67,116 @@ export const EscrowCard: React.FC<EscrowCardProps> = ({
       className="glass-card glass-card-interactive"
       onClick={() => onSelect(escrow.id)}
       style={{
-        padding: '1.4rem',
+        padding: '1.6rem',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        gap: '1.25rem',
+        gap: '1.3rem',
+        position: 'relative',
+        overflow: 'hidden',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
       }}
     >
-      {/* Top Bar: ID + State Badge + Mini Timeline */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              fontWeight: 500,
-              color: 'var(--text-primary)',
-              letterSpacing: '0.08em',
-            }}
-          >
-            {shortId}
-          </span>
-
-          <span className={getStateBadgeClass()}>
-            {escrow.state === EscrowState.Funded && (
-              <span
-                style={{
-                  width: '4px',
-                  height: '4px',
-                  borderRadius: '50%',
-                  background: 'var(--accent-emerald)',
-                }}
-              />
-            )}
-            {escrow.stateLabel}
-          </span>
-        </div>
-
-        <StateTimeline state={escrow.state} compact />
+      {/* Ambient background watermark */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '-15px',
+          right: '-15px',
+          opacity: 0.03,
+          pointerEvents: 'none',
+        }}
+      >
+        <ShieldCheck size={140} color="var(--accent-gold)" />
       </div>
 
-      {/* Main Content: Amount + Condition */}
+      {/* Top Header: ID + State Badge + Timeline */}
       <div>
-        {/* Amount Row */}
-        <div style={{ marginBottom: '0.8rem' }}>
-          <span className="section-label" style={{ marginBottom: '2px', fontSize: '8.5px' }}>
-            LOCKED VALUE
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                letterSpacing: '0.08em',
+                background: 'rgba(255, 255, 255, 0.03)',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+              }}
+            >
+              {shortId}
+            </span>
+
+            <span className={getStateBadgeClass()}>
+              <span
+                style={{
+                  width: '5px',
+                  height: '5px',
+                  borderRadius: '50%',
+                  background: getStatusColor(),
+                  boxShadow: `0 0 6px ${getStatusColor()}`,
+                }}
+              />
+              <span>{escrow.stateLabel}</span>
+            </span>
+          </div>
+
+          <StateTimeline state={escrow.state} compact />
+        </div>
+
+        {/* Counterparties Flow */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '9px',
+            color: 'var(--text-muted)',
+            letterSpacing: '0.08em',
+            background: 'rgba(255, 255, 255, 0.015)',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            border: '1px solid rgba(255, 255, 255, 0.04)',
+          }}
+        >
+          <span>{escrow.buyerAddress.slice(0, 10)}...</span>
+          <ArrowRight size={10} color="var(--accent-gold)" />
+          <span>{escrow.sellerAddress.slice(0, 10)}...</span>
+        </div>
+      </div>
+
+      {/* Middle Section: Amount + Condition */}
+      <div>
+        {/* Amount Box */}
+        <div
+          style={{
+            padding: '0.85rem 1rem',
+            background: 'rgba(194, 168, 120, 0.03)',
+            border: '1px solid rgba(194, 168, 120, 0.12)',
+            borderRadius: '6px',
+            marginBottom: '0.9rem',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+            <span className="section-label" style={{ marginBottom: 0, fontSize: '8.5px' }}>
+              LOCKED SHIELDED VALUE
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '8.5px', color: 'var(--accent-gold)', letterSpacing: '0.1em' }}>
+              ZK PEDERSEN
+            </span>
+          </div>
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '1.3rem',
-              fontWeight: 400,
+              fontSize: '1.4rem',
+              fontWeight: 500,
               color: 'var(--text-primary)',
               letterSpacing: '0.02em',
+              marginTop: '2px',
             }}
           >
             <PrivacyToggle
@@ -117,11 +187,14 @@ export const EscrowCard: React.FC<EscrowCardProps> = ({
           </div>
         </div>
 
-        {/* Condition Text */}
+        {/* Condition Box */}
         <div>
-          <span className="section-label" style={{ marginBottom: '2px', fontSize: '8.5px', color: 'var(--text-muted)' }}>
-            CONDITION
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+            <FileText size={10} color="var(--text-muted)" />
+            <span className="section-label" style={{ marginBottom: 0, fontSize: '8.5px', color: 'var(--text-muted)' }}>
+              CONDITION / MILESTONE
+            </span>
+          </div>
           <p
             style={{
               fontFamily: 'var(--font-sans)',
@@ -133,21 +206,25 @@ export const EscrowCard: React.FC<EscrowCardProps> = ({
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
+              background: 'rgba(255, 255, 255, 0.015)',
+              padding: '8px 10px',
+              borderRadius: '4px',
+              border: '1px solid rgba(255, 255, 255, 0.04)',
             }}
           >
-            {escrow.condition}
+            "{escrow.condition}"
           </p>
         </div>
       </div>
 
-      {/* Bottom Bar: Created Date + Action Button */}
+      {/* Bottom Bar: Timestamp + Actions */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-          paddingTop: '0.85rem',
+          paddingTop: '0.9rem',
         }}
       >
         <div
@@ -162,17 +239,17 @@ export const EscrowCard: React.FC<EscrowCardProps> = ({
             letterSpacing: '0.12em',
           }}
         >
-          <Clock size={10} />
+          <Clock size={11} />
           <span>{dateFormatted}</span>
         </div>
 
         {/* Action Button based on state */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
           {escrow.state === EscrowState.Created && (
             <button
               type="button"
               className="btn-primary"
-              style={{ padding: '0.35rem 0.75rem', fontSize: '9px' }}
+              style={{ padding: '0.4rem 0.85rem', fontSize: '9px' }}
               onClick={(e) => onActionClick(e, 'deposit', escrow)}
             >
               <span>DEPOSIT</span>
@@ -184,10 +261,10 @@ export const EscrowCard: React.FC<EscrowCardProps> = ({
               type="button"
               className="btn-secondary"
               style={{
-                padding: '0.35rem 0.75rem',
+                padding: '0.4rem 0.85rem',
                 fontSize: '9px',
                 borderColor: 'rgba(139, 92, 246, 0.4)',
-                color: 'var(--accent-violet)',
+                color: '#a78bfa',
               }}
               onClick={(e) => onActionClick(e, 'confirmDelivery', escrow)}
             >
@@ -199,7 +276,7 @@ export const EscrowCard: React.FC<EscrowCardProps> = ({
             <button
               type="button"
               className="btn-emerald"
-              style={{ padding: '0.35rem 0.75rem', fontSize: '9px' }}
+              style={{ padding: '0.4rem 0.85rem', fontSize: '9px' }}
               onClick={(e) => onActionClick(e, 'release', escrow)}
             >
               <span>RELEASE</span>
@@ -209,11 +286,11 @@ export const EscrowCard: React.FC<EscrowCardProps> = ({
           <button
             type="button"
             className="btn-ghost"
-            style={{ padding: '0.3rem 0.5rem', fontSize: '9px' }}
+            style={{ padding: '0.35rem 0.6rem', fontSize: '9.5px', color: 'var(--accent-gold)' }}
             onClick={() => onSelect(escrow.id)}
           >
             <span>DETAILS</span>
-            <ArrowUpRight size={10} />
+            <ArrowUpRight size={11} />
           </button>
         </div>
       </div>

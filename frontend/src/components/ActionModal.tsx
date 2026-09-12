@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EscrowRecord } from '../types/escrow';
-import { AlertTriangle, ShieldCheck, ArrowRight, Loader2, X } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, ArrowRight, Loader2, X, Lock } from 'lucide-react';
 
 export type ActionType =
   | 'deposit'
@@ -46,7 +47,7 @@ const ACTION_CONFIGS: Record<
     confirmLabel: 'Confirm Delivery',
     buttonClass: 'btn-primary',
     isDestructive: false,
-    icon: <ShieldCheck size={20} color="var(--accent-violet)" />,
+    icon: <ShieldCheck size={20} color="#a78bfa" />,
   },
   release: {
     title: 'Release Funds to Seller',
@@ -95,6 +96,17 @@ export const ActionModal: React.FC<ActionModalProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   if (!isOpen || !actionType || !escrow) return null;
 
   const config = ACTION_CONFIGS[actionType];
@@ -111,17 +123,23 @@ export const ActionModal: React.FC<ActionModalProps> = ({
     }
   };
 
-  return (
+  const modalContent = (
     <AnimatePresence>
-      <div className="modal-overlay" onClick={onClose}>
+      <div 
+        className="modal-overlay" 
+        onClick={onClose}
+        data-lenis-prevent
+        onWheel={(e) => e.stopPropagation()}
+      >
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
+          initial={{ opacity: 0, scale: 0.94, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
+          exit={{ opacity: 0, scale: 0.94, y: 15 }}
           transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
           className="modal-content"
-          style={{ maxWidth: '480px', padding: '2rem' }}
+          style={{ maxWidth: '500px', padding: '2.2rem' }}
           onClick={(e) => e.stopPropagation()}
+          data-lenis-prevent
         >
           {/* Header */}
           <div
@@ -129,17 +147,19 @@ export const ActionModal: React.FC<ActionModalProps> = ({
               display: 'flex',
               alignItems: 'flex-start',
               justifyContent: 'space-between',
-              marginBottom: '1.25rem',
+              marginBottom: '1.4rem',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              paddingBottom: '1rem',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
               <div
                 style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '8px',
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '10px',
                   background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid var(--border-subtle)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -149,12 +169,12 @@ export const ActionModal: React.FC<ActionModalProps> = ({
               </div>
               <div>
                 <span className="section-label" style={{ marginBottom: '2px' }}>
-                  Confirmation Required
+                  STATE TRANSITION
                 </span>
                 <h3
                   style={{
                     fontFamily: 'var(--font-serif)',
-                    fontSize: '1.4rem',
+                    fontSize: '1.5rem',
                     fontStyle: 'italic',
                     letterSpacing: '-0.02em',
                     color: 'var(--text-primary)',
@@ -170,14 +190,18 @@ export const ActionModal: React.FC<ActionModalProps> = ({
               type="button"
               onClick={onClose}
               style={{
-                background: 'none',
-                border: 'none',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '6px',
                 color: 'var(--text-muted)',
                 cursor: 'pointer',
-                padding: '4px',
+                padding: '5px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
-              <X size={16} />
+              <X size={15} />
             </button>
           </div>
 
@@ -188,11 +212,11 @@ export const ActionModal: React.FC<ActionModalProps> = ({
               fontSize: '13px',
               lineHeight: 1.6,
               color: 'var(--text-muted)',
-              marginBottom: '2rem',
-              padding: '1rem',
-              background: 'rgba(255, 255, 255, 0.015)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
+              marginBottom: '1.8rem',
+              padding: '1.2rem',
+              background: 'rgba(255, 255, 255, 0.02)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              borderRadius: '8px',
             }}
           >
             {config.description(escrow)}
@@ -204,7 +228,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
-              gap: '0.75rem',
+              gap: '0.85rem',
             }}
           >
             <button
@@ -220,6 +244,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
               className={config.buttonClass}
               onClick={handleConfirm}
               disabled={isSubmitting}
+              style={{ gap: '0.5rem' }}
             >
               {isSubmitting ? (
                 <>
@@ -238,4 +263,6 @@ export const ActionModal: React.FC<ActionModalProps> = ({
       </div>
     </AnimatePresence>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : null;
 };

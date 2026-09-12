@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMidnightWallet } from '../context/MidnightWalletContext';
 import { type CreateEscrowRequest } from '../types/escrow';
-import { X, ShieldCheck, Loader2, Lock, Sparkles, AlertCircle } from 'lucide-react';
+import { X, ShieldCheck, Loader2, Lock, Sparkles, AlertCircle, Key, Coins, FileCode } from 'lucide-react';
 
 interface CreateEscrowModalProps {
   isOpen: boolean;
@@ -26,6 +27,17 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -35,18 +47,18 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
     const buyer = address || 'mn_shielded_19f8a3c82d4e7b1a9c3e5d7f2a1b4c6e8d0f2a4b';
 
     if (!sellerAddress.trim()) {
-      setValidationError('Please enter a recipient / seller shielded address.');
+      setValidationError('Please enter a valid counterparty / seller shielded address.');
       return;
     }
 
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
-      setValidationError('Please specify a valid escrow amount greater than 0.');
+      setValidationError('Please enter a valid escrow amount greater than 0.');
       return;
     }
 
     if (!condition.trim() || condition.trim().length < 5) {
-      setValidationError('Please define the condition or milestone to be delivered.');
+      setValidationError('Please define the condition or milestone requirement.');
       return;
     }
 
@@ -59,7 +71,6 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
         token,
         condition: condition.trim(),
       });
-      // Reset form on success
       setSellerAddress('');
       setAmount('');
       setCondition('');
@@ -75,55 +86,90 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
     setSellerAddress(SAMPLE_SELLER);
   };
 
-  return (
+  const modalContent = (
     <AnimatePresence>
-      <div className="modal-overlay" onClick={onClose}>
+      <div 
+        className="modal-overlay" 
+        onClick={onClose}
+        data-lenis-prevent
+        onWheel={(e) => e.stopPropagation()}
+      >
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          initial={{ opacity: 0, scale: 0.94, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+          exit={{ opacity: 0, scale: 0.94, y: 15 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           className="modal-content"
-          style={{ maxWidth: '580px', padding: '2rem' }}
+          style={{ maxWidth: '620px', padding: '2.4rem' }}
           onClick={(e) => e.stopPropagation()}
+          data-lenis-prevent
         >
-          {/* Header */}
+          {/* Top Header */}
           <div
             style={{
               display: 'flex',
               alignItems: 'flex-start',
               justifyContent: 'space-between',
-              marginBottom: '1.5rem',
+              marginBottom: '1.8rem',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
+              paddingBottom: '1.25rem',
             }}
           >
-            <div>
-              <span className="section-label">Zero-Knowledge Escrow</span>
-              <h2
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              <div
                 style={{
-                  fontFamily: 'var(--font-serif)',
-                  fontSize: '1.8rem',
-                  fontStyle: 'italic',
-                  letterSpacing: '-0.03em',
-                  color: 'var(--text-primary)',
-                  lineHeight: 1.1,
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '10px',
+                  background: 'rgba(194, 168, 120, 0.08)',
+                  border: '1px solid rgba(194, 168, 120, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 0 20px rgba(194, 168, 120, 0.1)',
                 }}
               >
-                Create Private Escrow<span style={{ color: 'var(--accent-gold)' }}>.</span>
-              </h2>
+                <Lock size={20} color="var(--accent-gold)" />
+              </div>
+              <div>
+                <span className="section-label" style={{ marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'var(--accent-emerald)', display: 'inline-block' }} />
+                  ZERO-KNOWLEDGE ESCROW
+                </span>
+                <h2
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    fontSize: '2rem',
+                    fontStyle: 'italic',
+                    letterSpacing: '-0.03em',
+                    color: 'var(--text-primary)',
+                    lineHeight: 1.1,
+                  }}
+                >
+                  Create Private Escrow<span style={{ color: 'var(--accent-gold)' }}>.</span>
+                </h2>
+              </div>
             </div>
 
             <button
               type="button"
               onClick={onClose}
               style={{
-                background: 'none',
-                border: 'none',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '6px',
                 color: 'var(--text-muted)',
                 cursor: 'pointer',
-                padding: '4px',
+                padding: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease',
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)')}
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
 
@@ -134,42 +180,46 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.6rem',
-                padding: '0.75rem 1rem',
+                padding: '0.85rem 1.1rem',
                 borderRadius: '6px',
                 background: 'rgba(255, 80, 80, 0.1)',
                 border: '1px solid rgba(255, 80, 80, 0.3)',
                 color: 'var(--accent-crimson)',
                 fontFamily: 'var(--font-mono)',
                 fontSize: '11px',
-                marginBottom: '1.25rem',
+                marginBottom: '1.4rem',
               }}
             >
-              <AlertCircle size={14} />
+              <AlertCircle size={15} />
               <span>{validationError}</span>
             </div>
           )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            {/* Seller Address */}
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.4rem' }}>
+            {/* Seller Address Field */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                <label className="section-label" style={{ marginBottom: 0 }}>
-                  Seller Shielded Address
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+                <label className="section-label" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Key size={11} color="var(--accent-gold)" />
+                  <span>SELLER SHIELDED ADDRESS</span>
                 </label>
                 <button
                   type="button"
                   onClick={useSampleAddress}
                   style={{
-                    background: 'none',
-                    border: 'none',
+                    background: 'rgba(194, 168, 120, 0.06)',
+                    border: '1px solid rgba(194, 168, 120, 0.2)',
+                    borderRadius: '9999px',
                     fontFamily: 'var(--font-mono)',
                     fontSize: '9px',
                     color: 'var(--accent-gold)',
                     cursor: 'pointer',
-                    textDecoration: 'underline',
-                    padding: 0,
+                    padding: '2px 8px',
+                    transition: 'all 0.2s ease',
                   }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(194, 168, 120, 0.15)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(194, 168, 120, 0.06)')}
                 >
                   Use Sample Counterparty
                 </button>
@@ -181,13 +231,17 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
                 value={sellerAddress}
                 onChange={(e) => setSellerAddress(e.target.value)}
                 disabled={isSubmitting}
+                style={{ height: '42px', fontSize: '11px', letterSpacing: '0.04em' }}
               />
             </div>
 
-            {/* Amount & Token */}
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem' }}>
+            {/* Amount & Token Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1.2fr', gap: '0.85rem' }}>
               <div>
-                <label className="section-label">Locked Amount</label>
+                <label className="section-label" style={{ marginBottom: '0.45rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <Coins size={11} color="var(--accent-gold)" />
+                  <span>LOCKED AMOUNT</span>
+                </label>
                 <input
                   type="number"
                   step="0.01"
@@ -197,16 +251,20 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   disabled={isSubmitting}
+                  style={{ height: '42px', fontSize: '12px', fontWeight: 500 }}
                 />
               </div>
 
               <div>
-                <label className="section-label">Token</label>
+                <label className="section-label" style={{ marginBottom: '0.45rem' }}>
+                  TOKEN
+                </label>
                 <select
                   className="form-select"
                   value={token}
                   onChange={(e) => setToken(e.target.value)}
                   disabled={isSubmitting}
+                  style={{ height: '42px', fontSize: '11px' }}
                 >
                   <option value="tDUST">tDUST (Midnight)</option>
                   <option value="DUST">DUST (Mainnet)</option>
@@ -215,48 +273,67 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
               </div>
             </div>
 
-            {/* Condition */}
+            {/* Delivery Condition */}
             <div>
-              <label className="section-label">Delivery Condition / Milestone</label>
+              <label className="section-label" style={{ marginBottom: '0.45rem', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <FileCode size={11} color="var(--accent-gold)" />
+                <span>DELIVERY CONDITION / MILESTONE SPECIFICATION</span>
+              </label>
               <textarea
                 className="form-textarea"
                 placeholder="Specify condition requirement (e.g. 'Deliver Phase 2 verification proof by Sept 30'). Condition text will be cryptographically hashed into zero-knowledge commitment."
                 value={condition}
                 onChange={(e) => setCondition(e.target.value)}
                 disabled={isSubmitting}
+                rows={3}
+                style={{ fontSize: '11px', lineHeight: 1.6 }}
               />
             </div>
 
-            {/* ZK Cryptographic Privacy Box */}
+            {/* ZK Cryptographic Witness Box */}
             <div
               style={{
-                padding: '0.9rem',
+                padding: '1.1rem',
                 background: 'rgba(194, 168, 120, 0.03)',
-                border: '1px solid rgba(194, 168, 120, 0.15)',
-                borderRadius: '6px',
+                border: '1px solid rgba(194, 168, 120, 0.16)',
+                borderRadius: '8px',
                 fontFamily: 'var(--font-mono)',
                 fontSize: '10px',
                 color: 'var(--text-muted)',
-                lineHeight: 1.5,
+                lineHeight: 1.6,
+                position: 'relative',
+                overflow: 'hidden',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--accent-gold)', marginBottom: '0.3rem' }}>
-                <Lock size={12} />
-                <span style={{ fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                  Zero-Knowledge Witness Guarantee
-                </span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  color: 'var(--accent-gold)',
+                  marginBottom: '0.4rem',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                <ShieldCheck size={14} color="var(--accent-emerald)" />
+                <span>Zero-Knowledge Witness Guarantee</span>
               </div>
               On-chain observers only see Pedersen commitments. The locked amount and condition text remain strictly private between buyer and seller until verified.
             </div>
 
-            {/* Buttons */}
+            {/* Action Buttons */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'flex-end',
-                gap: '0.75rem',
-                marginTop: '0.5rem',
+                gap: '0.85rem',
+                marginTop: '0.6rem',
+                borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                paddingTop: '1.25rem',
               }}
             >
               <button
@@ -264,6 +341,7 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
                 className="btn-secondary"
                 onClick={onClose}
                 disabled={isSubmitting}
+                style={{ padding: '0.75rem 1.4rem' }}
               >
                 Cancel
               </button>
@@ -271,6 +349,7 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
                 type="submit"
                 className="btn-primary"
                 disabled={isSubmitting}
+                style={{ padding: '0.75rem 1.8rem', gap: '0.6rem' }}
               >
                 {isSubmitting ? (
                   <>
@@ -290,4 +369,6 @@ export const CreateEscrowModal: React.FC<CreateEscrowModalProps> = ({
       </div>
     </AnimatePresence>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : null;
 };

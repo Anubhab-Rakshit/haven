@@ -121,7 +121,7 @@ body, a, button, input, select, textarea {
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
   pointer-events: none;
-  z-index: 10000;
+  z-index: 1000000;
   mix-blend-mode: difference;
 }
 
@@ -134,7 +134,7 @@ body, a, button, input, select, textarea {
   background: white;
   border-radius: 50%;
   pointer-events: none;
-  z-index: 10000;
+  z-index: 1000000;
   mix-blend-mode: difference;
 }
 
@@ -161,7 +161,7 @@ body, a, button, input, select, textarea {
 }
 
 .haven-container {
-  max-width: 1180px;
+  max-width: 1200px;
   width: 100%;
   margin: 0 auto;
   padding: 0 1.5rem;
@@ -196,16 +196,16 @@ body, a, button, input, select, textarea {
       rgba(255, 255, 255, 0.06),
       transparent 40%
     ),
-    rgba(255, 255, 255, 0.02) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+    rgba(18, 16, 22, 0.6) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 100px;
   padding: 0.75rem 1.75rem;
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6);
   pointer-events: auto;
   max-width: 90vw;
   transition: border-color 0.3s ease;
@@ -388,6 +388,7 @@ body, a, button, input, select, textarea {
   letter-spacing: 0.22em;
   color: var(--accent-gold);
   display: inline-block;
+  margin-bottom: 0.35rem;
 }
 
 .hero-title {
@@ -577,22 +578,22 @@ body, a, button, input, select, textarea {
       rgba(255, 255, 255, 0.06),
       transparent 40%
     ),
-    rgba(255, 255, 255, 0.02) !important;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+    rgba(18, 16, 22, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
   box-shadow: 
-    0 40px 100px -20px rgba(0, 0, 0, 0.8),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    inset 0 0 40px rgba(255, 255, 255, 0.02);
+    0 30px 60px -15px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 30px rgba(255, 255, 255, 0.02);
   transition: all 0.35s var(--ease-decel);
   position: relative;
 }
 
 .glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  box-shadow: 0 25px 55px -15px rgba(0, 0, 0, 0.9), 0 0 30px rgba(194, 168, 120, 0.08);
+  border-color: rgba(194, 168, 120, 0.25);
+  box-shadow: 0 30px 70px -15px rgba(0, 0, 0, 0.92), 0 0 30px rgba(194, 168, 120, 0.08);
 }
 
 .glass-card-interactive {
@@ -602,7 +603,7 @@ body, a, button, input, select, textarea {
 .glass-card-interactive:hover {
   transform: translateY(-3px);
   border-color: rgba(194, 168, 120, 0.35);
-  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.95), 0 0 35px rgba(194, 168, 120, 0.15);
+  box-shadow: 0 35px 75px -15px rgba(0, 0, 0, 0.95), 0 0 35px rgba(194, 168, 120, 0.15);
 }
 
 /* ============================
@@ -774,7 +775,7 @@ body, a, button, input, select, textarea {
 }
 
 /* ============================
-   Inputs & Modals
+   Inputs & Form Elements
 ============================ */
 .form-input,
 .form-textarea,
@@ -783,9 +784,9 @@ body, a, button, input, select, textarea {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 6px;
   padding: 0.75rem 1rem;
   outline: none;
   transition: all 0.3s ease;
@@ -796,34 +797,66 @@ body, a, button, input, select, textarea {
 .form-textarea:focus,
 .form-select:focus {
   border-color: var(--accent-gold);
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow: 0 0 20px rgba(194, 168, 120, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 20px rgba(194, 168, 120, 0.2);
 }
 
+.form-select option {
+  background: #0d0b12;
+  color: #f0f0f0;
+}
+
+/* ============================
+   Modal Overlays (Centered & Scrollable)
+============================ */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(2, 2, 3, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(2, 2, 3, 0.88);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  padding: 1.5rem;
+  z-index: 100000 !important;
+  padding: 2.5rem 1.25rem;
+  overflow-y: auto;
 }
 
 .modal-content {
-  background: rgba(14, 12, 18, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  box-shadow: 0 35px 70px -15px rgba(0, 0, 0, 0.95), 0 0 35px rgba(194, 168, 120, 0.06);
+  background: 
+    radial-gradient(
+      600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), 
+      rgba(194, 168, 120, 0.06),
+      transparent 50%
+    ),
+    rgba(14, 12, 18, 0.95) !important;
+  border: 1px solid rgba(194, 168, 120, 0.25) !important;
+  border-radius: 12px;
+  box-shadow: 
+    0 40px 100px -20px rgba(0, 0, 0, 0.98), 
+    0 0 45px rgba(194, 168, 120, 0.12);
   width: 100%;
-  max-width: 620px;
-  max-height: 90vh;
+  max-height: calc(100vh - 4.5rem);
   overflow-y: auto;
   position: relative;
+  margin: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(194, 168, 120, 0.3) transparent;
+}
+
+.modal-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: rgba(194, 168, 120, 0.3);
+  border-radius: 10px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
 }
