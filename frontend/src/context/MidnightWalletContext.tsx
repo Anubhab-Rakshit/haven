@@ -88,6 +88,20 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, []);
 
+  // Clear stale wallet state on mount — if wallet was "connected" but page reloaded,
+  // the Lace channel is dead. User must re-authorize.
+  useEffect(() => {
+    if (isConnected && !connectedApi && availableWallets.length === 0) {
+      // Wallet was connected from a previous page load but no wallet detected now
+      // This means the channel is stale — clear it
+      setIsConnected(false);
+      setAddress(null);
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_ADDRESS_KEY);
+      localStorage.removeItem(STORAGE_WALLET_ID_KEY);
+    }
+  }, [isConnected, connectedApi, availableWallets]);
+
   const shortAddress = address
     ? `${address.slice(0, 11)}...${address.slice(-6)}`
     : null;
@@ -112,11 +126,33 @@ export function MidnightWalletProvider({ children }: { children: ReactNode }) {
         if (found) selected = found;
       }
 
-      const api = await selected.api.connect(NETWORK_ID);
+      let api: ConnectedAPI;
+      try {
+        api = await selected.api.connect(NETWORK_ID);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Lace sometimes has stale channels after unlock — clear and ask user to retry
+        if (msg.includes('shutdown') || msg.includes('no longer be used') || msg.includes('channel')) {
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(STORAGE_ADDRESS_KEY);
+          localStorage.removeItem(STORAGE_WALLET_ID_KEY);
+          throw new Error(
+            'Wallet connection reset. Please reload the page and try again.'
+          );
+        }
+        throw err;
+      }
 
       // Get the shielded address (the private address used for ZK escrows)
-      const shielded = await api.getShieldedAddresses();
-      const walletAddress = shielded.shieldedAddress;
+      let walletAddress: string;
+      try {
+        const shielded = await api.getShieldedAddresses();
+        walletAddress = shielded.shieldedAddress;
+      } catch {
+        // Some wallets may not support shielded — fall back to unshielded
+        const unshielded = await api.getUnshieldedAddress();
+        walletAddress = unshielded.unshieldedAddress;
+      }
 
       setConnectedApi(api);
       setAddress(walletAddress);
