@@ -26,20 +26,18 @@ import {
     computeEscrowHash,
 } from "./verification";
 import { getDeployedContractAddress } from "../network";
+import { env } from "../env";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // ─── Supabase Client ──────────────────────────────────────────────────────────
 // Falls back to in-memory Map when Supabase env vars are not configured.
 
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
-
 let _supabase: SupabaseClient | null = null;
 
 function getSupabase(): SupabaseClient | null {
     if (_supabase) return _supabase;
-    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-        _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    if (env.SUPABASE_URL && env.SUPABASE_ANON_KEY) {
+        _supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
         return _supabase;
     }
     return null;
@@ -189,7 +187,10 @@ export async function deployEscrow(
     // Also persist to Supabase if configured
     const sb = getSupabase();
     if (sb) {
-        await sb.from("escrows").insert(recordToRow(record));
+        const { error } = await sb.from("escrows").insert(recordToRow(record));
+        if (error) {
+            console.error("Supabase insert failed:", error.message);
+        }
     }
 
     // Store private state
@@ -384,7 +385,10 @@ async function performEscrowAction(
     // Sync to Supabase if configured
     const sb = getSupabase();
     if (sb) {
-        await sb.from("escrows").update(recordToRow(updatedRecord)).eq("id", escrowId);
+        const { error } = await sb.from("escrows").update(recordToRow(updatedRecord)).eq("id", escrowId);
+        if (error) {
+            console.error("Supabase update failed:", error.message);
+        }
     }
 
     // Update private state
@@ -406,12 +410,13 @@ async function performEscrowAction(
 
 /**
  * Gets an escrow record by ID.
+ * Checks in-memory first, then Supabase.
  */
 export function getEscrow(escrowId: string): EscrowRecord | null {
     const local = escrowStore.get(escrowId);
     if (local) return local;
 
-    // Try Supabase (sync fallback: return null if SB, caller should use async version)
+    // NOTE: For sync callers, we return null. Use getEscrowAsync for Supabase.
     return null;
 }
 
@@ -424,8 +429,9 @@ export async function getEscrowAsync(escrowId: string): Promise<EscrowRecord | n
 
     const sb = getSupabase();
     if (sb) {
-        const { data } = await sb.from("escrows").select("*").eq("id", escrowId).single();
-        return data ? rowToRecord(data) : null;
+        const { data, error } = await sb.from("escrows").select("*").eq("id", escrowId).single();
+        if (error || !data) return null;
+        return rowToRecord(data);
     }
     return null;
 }
@@ -480,7 +486,11 @@ export async function listEscrowsAsync(filters?: {
         if (filters?.sellerAddress) {
             query = query.eq("seller_address", filters.sellerAddress);
         }
-        const { data } = await query.order("created_at", { ascending: false });
+        const { data, error } = await query.order("created_at", { ascending: false });
+        if (error) {
+            console.error("Supabase query failed:", error.message);
+            return listEscrows(filters);
+        }
         return (data || []).map(rowToRecord);
     }
     return listEscrows(filters);
@@ -502,7 +512,9 @@ export function removeEscrow(escrowId: string): boolean {
 
     const sb = getSupabase();
     if (sb) {
-        sb.from("escrows").delete().eq("id", escrowId);
+        sb.from("escrows").delete().eq("id", escrowId).then(({ error }) => {
+            if (error) console.error("Supabase delete failed:", error.message);
+        });
     }
 
     return deleted;
@@ -517,7 +529,9 @@ export function clearAllEscrows(): void {
 
     const sb = getSupabase();
     if (sb) {
-        sb.from("escrows").delete().neq("id", "");
+        sb.from("escrows").delete().neq("id", "").then(({ error }) => {
+            if (error) console.error("Supabase clear failed:", error.message);
+        });
     }
 }
 

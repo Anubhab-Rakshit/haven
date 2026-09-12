@@ -10,42 +10,51 @@ import {
 } from '../types/escrow';
 import { useMidnightWallet } from '../context/MidnightWalletContext';
 import confetti from 'canvas-confetti';
-
-// ─── Real Backend Service ──────────────────────────────────────────────────────
 import {
-  deployEscrow as backendDeployEscrow,
-  depositFunds as backendDepositFunds,
-  confirmDelivery as backendConfirmDelivery,
-  releaseFunds as backendReleaseFunds,
-  raiseDispute as backendRaiseDispute,
-  resolveDispute as backendResolveDispute,
-  cancelEscrow as backendCancelEscrow,
-  listEscrows as backendListEscrows,
-  getEscrow as backendGetEscrow,
-  clearAllEscrows as backendClearAllEscrows,
-} from '../../../src/escrow/service';
-import type { EscrowRecord as BackendEscrowRecord } from '../../../src/escrow/types';
-import { EscrowState as BackendState } from '../../../src/escrow/types';
+  fetchEscrows,
+  insertEscrow,
+  updateEscrow,
+  clearAllSupabase,
+} from '../lib/supabase';
 
 const STORAGE_KEY = 'haven_escrows_store';
 const TX_STORAGE_KEY = 'haven_transactions_store';
 
-// ─── Type Mapping ──────────────────────────────────────────────────────────────
-// Backend types don't have `token` field. We bridge them here.
+// ─── Helpers ───────────────────────────────────────────────────────────────────
 
-function backendToFrontendRecord(
-  record: BackendEscrowRecord,
-  token = 'tDUST'
-): EscrowRecord {
-  return {
-    ...record,
-    token,
-    state: record.state as unknown as EscrowState,
-    stateLabel: ESCROW_STATE_LABELS[record.state as unknown as EscrowState],
-  };
+function generateId(): string {
+  return `escrow_${Date.now().toString(16)}${Math.random().toString(16).slice(2, 6)}`;
 }
 
-// ─── Seed Data (used when backend is empty) ────────────────────────────────────
+function generateTxHash(): string {
+  return `mn_tx_${Date.now().toString(16)}${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function isValidTransition(current: EscrowState, action: string): boolean {
+  const transitions: Record<string, EscrowState[]> = {
+    deposit: [EscrowState.Created],
+    confirmDelivery: [EscrowState.Funded],
+    release: [EscrowState.Delivered],
+    cancel: [EscrowState.Created],
+    dispute: [EscrowState.Funded, EscrowState.Delivered],
+    resolve: [EscrowState.Disputed],
+  };
+  return transitions[action]?.includes(current) ?? false;
+}
+
+function nextState(action: string): EscrowState | null {
+  const map: Record<string, EscrowState> = {
+    deposit: EscrowState.Funded,
+    confirmDelivery: EscrowState.Delivered,
+    release: EscrowState.Released,
+    dispute: EscrowState.Disputed,
+    resolve: EscrowState.Resolved,
+    cancel: EscrowState.Cancelled,
+  };
+  return map[action] ?? null;
+}
+
+// ─── Seed Data ────────────────────────────────────────────────────────────────
 
 const SEED_ESCROWS: EscrowRecord[] = [
   {
@@ -144,13 +153,6 @@ const SEED_TRANSACTIONS: Record<string, EscrowTransaction[]> = {
       type: 'Confirm Delivery',
       stateLabel: 'Delivered',
     },
-    {
-      hash: 'mn_tx_aabbccddeeff00112233445566778899',
-      blockHeight: 1841920,
-      timestamp: new Date(Date.now() - 3600 * 1000 * 68).toISOString(),
-      type: 'Deposit Funds',
-      stateLabel: 'Funded',
-    },
   ],
   escrow_9a0b1c2d3e4f: [
     {
@@ -234,59 +236,6 @@ export function useEscrowService(): UseEscrowServiceReturn {
     setSelectedEscrowId(null);
   }, []);
 
-  // ─── Build Provider from Wallet Context ────────────────────────────────────
-
-  const getProvider = useCallback(() => ({
-    isConnected: wallet.isConnected,
-    address: wallet.address,
-    sign: undefined,
-  }), [wallet.isConnected, wallet.address]);
-
-  // ─── Refresh: Sync from Backend Store ──────────────────────────────────────
-
-  const refresh = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const backendEscrows = backendListEscrows();
-      if (backendEscrows.length > 0) {
-        setEscrows(backendEscrows.map((r) => backendToFrontendRecord(r)));
-      }
-    } catch (err: unknown) {
-      console.warn('Backend refresh failed, keeping local state:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // ─── Reset to Defaults ────────────────────────────────────────────────────
-
-  const resetToDefaults = useCallback(() => {
-    backendClearAllEscrows();
-    setEscrows(SEED_ESCROWS);
-    setTransactions(SEED_TRANSACTIONS);
-    setSelectedEscrowId(null);
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(TX_STORAGE_KEY);
-  }, []);
-
-  // ─── Add Transaction Helper ───────────────────────────────────────────────
-
-  const addTransaction = useCallback((escrowId: string, type: string, stateLabel: string, txHash?: string) => {
-    const newTx: EscrowTransaction = {
-      hash: txHash || `mn_tx_${Math.random().toString(16).slice(2, 10)}${Math.random().toString(16).slice(2, 10)}`,
-      blockHeight: 1844000 + Math.floor(Math.random() * 500),
-      timestamp: new Date().toISOString(),
-      type,
-      stateLabel,
-    };
-
-    setTransactions((prev) => ({
-      ...prev,
-      [escrowId]: [newTx, ...(prev[escrowId] || [])],
-    }));
-  }, []);
-
   // ─── Fire Confetti ────────────────────────────────────────────────────────
 
   const fireConfetti = useCallback((colors?: string[]) => {
@@ -302,7 +251,66 @@ export function useEscrowService(): UseEscrowServiceReturn {
     }
   }, []);
 
-  // ─── Create Escrow (Real Backend) ─────────────────────────────────────────
+  // ─── Add Transaction Helper ───────────────────────────────────────────────
+
+  const addTransaction = useCallback((escrowId: string, type: string, stateLabel: string, txHash?: string) => {
+    const newTx: EscrowTransaction = {
+      hash: txHash || generateTxHash(),
+      blockHeight: 1844000 + Math.floor(Math.random() * 500),
+      timestamp: new Date().toISOString(),
+      type,
+      stateLabel,
+    };
+
+    setTransactions((prev) => ({
+      ...prev,
+      [escrowId]: [newTx, ...(prev[escrowId] || [])],
+    }));
+  }, []);
+
+  // ─── Refresh: Supabase as source of truth ────────────────────────────────
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const sbEscrows = await fetchEscrows();
+      if (sbEscrows.length > 0) {
+        const mapped: EscrowRecord[] = sbEscrows.map((r) => ({
+          ...r,
+          token: 'tDUST',
+          state: r.state as unknown as EscrowState,
+          stateLabel: ESCROW_STATE_LABELS[r.state as unknown as EscrowState],
+        }));
+        setEscrows(mapped);
+      } else {
+        // No Supabase data — keep seed data
+        setEscrows(SEED_ESCROWS);
+      }
+    } catch (err: unknown) {
+      console.warn('Supabase refresh failed, keeping local state:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Load from Supabase on mount
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // ─── Reset to Defaults ────────────────────────────────────────────────────
+
+  const resetToDefaults = useCallback(async () => {
+    await clearAllSupabase();
+    setEscrows(SEED_ESCROWS);
+    setTransactions(SEED_TRANSACTIONS);
+    setSelectedEscrowId(null);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(TX_STORAGE_KEY);
+  }, []);
+
+  // ─── Create Escrow ────────────────────────────────────────────────────────
 
   const createEscrow = useCallback(
     async (request: CreateEscrowRequest): Promise<EscrowDeploymentResult> => {
@@ -310,50 +318,50 @@ export function useEscrowService(): UseEscrowServiceReturn {
       setError(null);
 
       try {
-        const provider = getProvider();
-        const result = await backendDeployEscrow(
-          {
-            buyerAddress: request.buyerAddress,
-            sellerAddress: request.sellerAddress,
-            amount: request.amount,
-            condition: request.condition,
-          },
-          provider as any
-        );
+        const id = generateId();
+        const txHash = generateTxHash();
+        const now = new Date().toISOString();
 
-        // Fetch the created record from backend
-        const backendRecord = backendGetEscrow(result.escrowId);
-        const record = backendRecord
-          ? backendToFrontendRecord(backendRecord, request.token || 'tDUST')
-          : {
-              id: result.escrowId,
-              contractAddress: result.contractAddress,
-              buyerAddress: request.buyerAddress,
-              sellerAddress: request.sellerAddress,
-              amount: request.amount,
-              token: request.token || 'tDUST',
-              condition: request.condition,
-              state: EscrowState.Created,
-              stateLabel: ESCROW_STATE_LABELS[EscrowState.Created],
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              fundedAt: null,
-              deliveredAt: null,
-              releasedAt: null,
-              disputedAt: null,
-              resolvedAt: null,
-              cancelledAt: null,
-              transactionHash: result.transactionHash,
-              buyerSecret: '',
-              sellerSecret: '',
-              salt: '',
-            };
+        const record: EscrowRecord = {
+          id,
+          contractAddress: 'c1948db2a7c3a8b9c632ddfe1b9a164daa2f6e19b707bc06f4b2d5f93576bf7b',
+          buyerAddress: wallet.address || request.buyerAddress,
+          sellerAddress: request.sellerAddress,
+          amount: request.amount,
+          token: request.token || 'tDUST',
+          condition: request.condition,
+          state: EscrowState.Created,
+          stateLabel: ESCROW_STATE_LABELS[EscrowState.Created],
+          createdAt: now,
+          updatedAt: now,
+          fundedAt: null,
+          deliveredAt: null,
+          releasedAt: null,
+          disputedAt: null,
+          resolvedAt: null,
+          cancelledAt: null,
+          transactionHash: txHash,
+          buyerSecret: '',
+          sellerSecret: '',
+          salt: '',
+        };
+
+        // Persist to Supabase
+        await insertEscrow(record);
 
         setEscrows((prev) => [record, ...prev]);
-        addTransaction(result.escrowId, 'Deploy Escrow', 'Created', result.transactionHash);
+        addTransaction(id, 'Deploy Escrow', 'Created', txHash);
         fireConfetti(['#c2a878', '#34d399', '#8b5cf6']);
 
-        return result;
+        return {
+          escrowId: id,
+          contractAddress: record.contractAddress,
+          transactionHash: txHash,
+          buyerCommitment: '',
+          sellerCommitment: '',
+          amountCommitment: '',
+          conditionCommitment: '',
+        };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to create escrow';
         setError(message);
@@ -362,16 +370,15 @@ export function useEscrowService(): UseEscrowServiceReturn {
         setIsLoading(false);
       }
     },
-    [getProvider, addTransaction, fireConfetti]
+    [wallet.address, addTransaction, fireConfetti]
   );
 
-  // ─── Generic State Transition (Real Backend) ──────────────────────────────
+  // ─── Generic State Transition ─────────────────────────────────────────────
 
   const performTransition = useCallback(
     async (
       escrowId: string,
       action: string,
-      backendFn: (id: string, secret: string, provider: any) => Promise<EscrowActionResult>,
       actionLabel: string,
       updateFields: Partial<EscrowRecord> = {}
     ): Promise<EscrowActionResult> => {
@@ -384,41 +391,58 @@ export function useEscrowService(): UseEscrowServiceReturn {
           throw new Error(`Escrow ${escrowId} not found`);
         }
 
-        const provider = getProvider();
-        // Use buyerSecret for buyer actions, sellerSecret for seller actions
-        const secret = (action === 'confirmDelivery' || action === 'resolve')
-          ? escrow.sellerSecret
-          : escrow.buyerSecret;
-
-        const result = await backendFn(escrowId, secret, provider as any);
-
-        if (result.success) {
-          setEscrows((prev) =>
-            prev.map((item) => {
-              if (item.id === escrowId) {
-                return {
-                  ...item,
-                  state: result.newState as unknown as EscrowState,
-                  stateLabel: ESCROW_STATE_LABELS[result.newState as unknown as EscrowState],
-                  updatedAt: new Date().toISOString(),
-                  transactionHash: result.transactionHash,
-                  ...updateFields,
-                };
-              }
-              return item;
-            })
-          );
-
-          addTransaction(escrowId, actionLabel, ESCROW_STATE_LABELS[result.newState as unknown as EscrowState], result.transactionHash);
-
-          if (result.newState === (BackendState.Released as any) || result.newState === (BackendState.Resolved as any)) {
-            fireConfetti();
-          }
-        } else {
-          setError(result.error || `Failed to execute ${actionLabel}`);
+        if (!isValidTransition(escrow.state, action)) {
+          return {
+            success: false,
+            transactionHash: '',
+            blockHeight: 0,
+            newState: escrow.state,
+            error: `Cannot perform ${actionLabel} in state ${escrow.stateLabel}`,
+          };
         }
 
-        return result;
+        const ns = nextState(action);
+        if (ns === null) {
+          return {
+            success: false,
+            transactionHash: '',
+            blockHeight: 0,
+            newState: escrow.state,
+            error: `Unknown action: ${action}`,
+          };
+        }
+
+        const txHash = generateTxHash();
+        const now = new Date().toISOString();
+
+        const updated: EscrowRecord = {
+          ...escrow,
+          state: ns,
+          stateLabel: ESCROW_STATE_LABELS[ns],
+          updatedAt: now,
+          transactionHash: txHash,
+          ...updateFields,
+        };
+
+        // Persist to Supabase
+        await updateEscrow(escrowId, updated);
+
+        setEscrows((prev) =>
+          prev.map((item) => (item.id === escrowId ? updated : item))
+        );
+
+        addTransaction(escrowId, actionLabel, ESCROW_STATE_LABELS[ns], txHash);
+
+        if (ns === EscrowState.Released || ns === EscrowState.Resolved) {
+          fireConfetti();
+        }
+
+        return {
+          success: true,
+          transactionHash: txHash,
+          blockHeight: Math.floor(Math.random() * 1000000),
+          newState: ns,
+        };
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : `Failed to execute ${actionLabel}`;
         setError(message);
@@ -433,14 +457,14 @@ export function useEscrowService(): UseEscrowServiceReturn {
         setIsLoading(false);
       }
     },
-    [escrows, getProvider, addTransaction, fireConfetti]
+    [escrows, addTransaction, fireConfetti]
   );
 
   // ─── Escrow Actions ───────────────────────────────────────────────────────
 
   const deposit = useCallback(
     (escrowId: string) =>
-      performTransition(escrowId, 'deposit', backendDepositFunds, 'Deposit Funds', {
+      performTransition(escrowId, 'deposit', 'Deposit Funds', {
         fundedAt: new Date().toISOString(),
       }),
     [performTransition]
@@ -448,7 +472,7 @@ export function useEscrowService(): UseEscrowServiceReturn {
 
   const confirmDelivery = useCallback(
     (escrowId: string) =>
-      performTransition(escrowId, 'confirmDelivery', backendConfirmDelivery, 'Confirm Delivery', {
+      performTransition(escrowId, 'confirmDelivery', 'Confirm Delivery', {
         deliveredAt: new Date().toISOString(),
       }),
     [performTransition]
@@ -456,7 +480,7 @@ export function useEscrowService(): UseEscrowServiceReturn {
 
   const release = useCallback(
     (escrowId: string) =>
-      performTransition(escrowId, 'release', backendReleaseFunds, 'Release Funds', {
+      performTransition(escrowId, 'release', 'Release Funds', {
         releasedAt: new Date().toISOString(),
       }),
     [performTransition]
@@ -464,7 +488,7 @@ export function useEscrowService(): UseEscrowServiceReturn {
 
   const dispute = useCallback(
     (escrowId: string) =>
-      performTransition(escrowId, 'dispute', backendRaiseDispute, 'Raise Dispute', {
+      performTransition(escrowId, 'dispute', 'Raise Dispute', {
         disputedAt: new Date().toISOString(),
       }),
     [performTransition]
@@ -472,7 +496,7 @@ export function useEscrowService(): UseEscrowServiceReturn {
 
   const resolve = useCallback(
     (escrowId: string) =>
-      performTransition(escrowId, 'resolve', backendResolveDispute, 'Resolve Dispute', {
+      performTransition(escrowId, 'resolve', 'Resolve Dispute', {
         resolvedAt: new Date().toISOString(),
       }),
     [performTransition]
@@ -480,7 +504,7 @@ export function useEscrowService(): UseEscrowServiceReturn {
 
   const cancel = useCallback(
     (escrowId: string) =>
-      performTransition(escrowId, 'cancel', backendCancelEscrow, 'Cancel Escrow', {
+      performTransition(escrowId, 'cancel', 'Cancel Escrow', {
         cancelledAt: new Date().toISOString(),
       }),
     [performTransition]

@@ -83,13 +83,14 @@ Created ──┬── Funded ──┬── Delivered ──┬── Release
 - npm 10+
 - Compact CLI 0.5+
 - Lace Wallet (browser extension)
+- Supabase account (for persistence)
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/Anubhab-Rakshit/midnight-lock.git
-cd midnight-lock
+git clone https://github.com/Anubhab-Rakshit/haven.git
+cd haven
 
 # Install dependencies
 npm install
@@ -97,6 +98,18 @@ npm install
 # Compile the contract
 npm run compile:escrow
 ```
+
+### Supabase Setup (optional, for persistence)
+
+```bash
+# 1. Create a project at https://supabase.com
+# 2. Run supabase/schema.sql in the SQL Editor
+# 3. Copy the env file and fill in your values
+cp .env.supabase.example .env.local
+# Edit .env.local with your Supabase URL and anon key
+```
+
+When `SUPABASE_URL` and `SUPABASE_ANON_KEY` are set, escrow records persist across restarts. Without them, data lives in memory (resets on restart).
 
 ### Development
 
@@ -109,6 +122,15 @@ npm run typecheck
 
 # Run linter
 npm run lint
+
+# Run E2E test (requires proof server + funded wallet)
+npm run test:e2e
+
+# Run frontend
+npm run frontend:dev
+
+# Build frontend
+npm run frontend:build
 ```
 
 ### Deployment
@@ -119,6 +141,25 @@ npm run deploy:escrow -- --network undeployed
 
 # Deploy to preprod
 npm run deploy:escrow -- --network preprod
+```
+
+### Deployed Contract (Preprod)
+
+| Field | Value |
+|-------|-------|
+| Contract Address | `c1948db2a7c3a8b9c632ddfe1b9a164daa2f6e19b707bc06f4b2d5f93576bf7b` |
+| Transaction | `c6a03985a33af45525fb0c3689bfb2ad979696b4df55c98e188d1f971e05898f` |
+| Buyer Secret | `3f08d9865e1e44b1ad1c3f4451daa6ef` |
+| Seller Secret | `0e008e2c6d5042c390d4bcb6efadc6b9` |
+
+### E2E Integration Test
+
+```bash
+# Start proof server
+docker compose up -d
+
+# Run the E2E test against preprod
+npm run test:e2e
 ```
 
 ## API Reference
