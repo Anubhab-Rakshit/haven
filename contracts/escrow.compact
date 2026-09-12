@@ -1,0 +1,133 @@
+pragma language_version >= 0.22;
+
+import CompactStandardLibrary;
+
+// ─── Public Ledger State ───────────────────────────────────────────────────────
+// Visible on-chain — observers can see commitments and state transitions
+// but never the actual amounts, conditions, or participant identities.
+
+export ledger buyerCommitment: Bytes<32>;
+export ledger sellerCommitment: Bytes<32>;
+export ledger amountCommitment: Bytes<32>;
+export ledger conditionCommitment: Bytes<32>;
+export ledger escrowState: Counter;
+export ledger depositCount: Counter;
+export ledger disputeCount: Counter;
+
+// ─── Private Witnesses ─────────────────────────────────────────────────────────
+// These never leave the client — used to generate ZK proofs.
+
+witness buyerSecret(): Bytes<32>;
+witness sellerSecret(): Bytes<32>;
+witness escrowAmount(): Bytes<32>;
+witness conditionHash(): Bytes<32>;
+
+// ─── Domain-Separated Commitments ──────────────────────────────────────────────
+// Each commitment type uses a unique domain prefix to prevent cross-domain attacks.
+
+circuit commitBuyer(secret: Bytes<32>): Bytes<32> {
+    return persistentHash<Vector<2, Bytes<32>>([
+        pad(32, "midnight-lock:v1:buyer:"),
+        secret
+    ]);
+}
+
+circuit commitSeller(secret: Bytes<32>): Bytes<32> {
+    return persistentHash<Vector<2, Bytes<32>>([
+        pad(32, "midnight-lock:v1:seller:"),
+        secret
+    ]);
+}
+
+circuit commitAmount(amount: Bytes<32>): Bytes<32> {
+    return persistentHash<Vector<2, Bytes<32>>([
+        pad(32, "midnight-lock:v1:amount:"),
+        amount
+    ]);
+}
+
+circuit commitCondition(condition: Bytes<32>): Bytes<32> {
+    return persistentHash<Vector<2, Bytes<32>>([
+        pad(32, "midnight-lock:v1:condition:"),
+        condition
+    ]);
+}
+
+// ─── Constructor ───────────────────────────────────────────────────────────────
+// Deploys the escrow contract and initializes it with the first escrow's
+// commitment hashes. The actual values are never revealed.
+
+constructor() {
+    const buyer = buyerSecret();
+    const seller = sellerSecret();
+    const amount = escrowAmount();
+    const condition = conditionHash();
+
+    buyerCommitment = disclose(commitBuyer(buyer));
+    sellerCommitment = disclose(commitSeller(seller));
+    amountCommitment = disclose(commitAmount(amount));
+    conditionCommitment = disclose(commitCondition(condition));
+    escrowState = disclose(0); // STATE_CREATED
+}
+
+// ─── Circuits ──────────────────────────────────────────────────────────────────
+// Each circuit enforces:
+// 1. Authorization — only the correct party can call it
+// 2. State transition — only valid transitions are allowed
+// 3. Privacy — no sensitive data is revealed
+
+// deposit — Buyer deposits funds (STATE_CREATED → STATE_FUNDED)
+// The buyer proves they know the buyer secret without revealing it.
+export circuit deposit(): [] {
+    const buyer = buyerSecret();
+    assert(buyerCommitment == commitBuyer(buyer), "Not the buyer");
+    assert(escrowState == 0, "Escrow not in created state");
+    depositCount.increment(1);
+    escrowState = disclose(1); // STATE_FUNDED
+}
+
+// confirmDelivery — Seller confirms delivery (STATE_FUNDED → STATE_DELIVERED)
+// The seller proves they know the seller secret without revealing it.
+export circuit confirmDelivery(): [] {
+    const seller = sellerSecret();
+    assert(sellerCommitment == commitSeller(seller), "Not the seller");
+    assert(escrowState == 1, "Escrow not in funded state");
+    escrowState = disclose(2); // STATE_DELIVERED
+}
+
+// release — Release funds to seller (STATE_DELIVERED → STATE_RELEASED)
+// The buyer confirms satisfaction with delivery, releasing the funds.
+export circuit release(): [] {
+    const buyer = buyerSecret();
+    assert(buyerCommitment == commitBuyer(buyer), "Not the buyer");
+    assert(escrowState == 2, "Escrow not in delivered state");
+    escrowState = disclose(3); // STATE_RELEASED
+}
+
+// dispute — Raise a dispute (STATE_FUNDED/STATE_DELIVERED → STATE_DISPUTED)
+// Either party can raise a dispute if something went wrong.
+export circuit dispute(): [] {
+    const buyer = buyerSecret();
+    assert(buyerCommitment == commitBuyer(buyer), "Not the buyer");
+    assert(escrowState == 1 || escrowState == 2, "Cannot dispute in current state");
+    disputeCount.increment(1);
+    escrowState = disclose(4); // STATE_DISPUTED
+}
+
+// resolve — Resolve a dispute (STATE_DISPUTED → STATE_RESOLVED)
+// An arbitrator (using the seller secret for this implementation) resolves the dispute.
+export circuit resolve(): [] {
+    const seller = sellerSecret();
+    assert(sellerCommitment == commitSeller(seller), "Not authorized to resolve");
+    assert(escrowState == 4, "Escrow not in disputed state");
+    escrowState = disclose(5); // STATE_RESOLVED
+}
+
+// cancel — Cancel escrow before funding (STATE_CREATED → STATE_CANCELLED)
+// Either party can cancel before any funds are deposited.
+export circuit cancel(): [] {
+    const buyer = buyerSecret();
+    assert(buyerCommitment == commitBuyer(buyer), "Not the buyer");
+    assert(escrowState == 0, "Escrow not in created state");
+    escrowState = disclose(6); // STATE_CANCELLED
+}

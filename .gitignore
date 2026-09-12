@@ -1,0 +1,11 @@
+node_modules/
+dist/
+artifacts/
+.env
+.env.local
+.env.*.local
+*.log
+.midnight-state.json
+.midnight-wallet-state
+coverage/
+.vite/

@@ -1,0 +1,56 @@
+{
+    "name": "haven",
+    "version": "1.0.0",
+    "description": "Private Escrow with ZK Condition Verification on Midnight Network",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "vitest",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage",
+        "lint": "oxlint src/ tests/",
+        "typecheck": "tsc --noEmit",
+        "compile:escrow": "compact compile contracts/escrow.compact --out-dir artifacts",
+        "deploy:escrow": "tsx scripts/deploy.ts",
+        "clean": "rm -rf dist artifacts"
+    },
+    "dependencies": {
+        "@midnight-ntwrk/compact-runtime": "0.16.0",
+        "@midnight-ntwrk/midnight-js-contracts": "4.1.1",
+        "@midnight-ntwrk/midnight-js-http-client-proof-provider": "4.1.1",
+        "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "4.1.1",
+        "@midnight-ntwrk/midnight-js-level-private-state-provider": "4.1.1",
+        "@midnight-ntwrk/midnight-js-network-id": "4.1.1",
+        "@midnight-ntwrk/midnight-js-node-zk-config-provider": "4.1.1",
+        "@midnight-ntwrk/midnight-js-protocol": "4.1.1",
+        "@midnight-ntwrk/midnight-js-types": "4.1.1",
+        "@midnight-ntwrk/midnight-js-utils": "4.1.1",
+        "@midnight-ntwrk/wallet-sdk": "1.2.0",
+        "rxjs": "^7.8.2"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "tsx": "^4.23.1",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.11"
+    },
+    "engines": {
+        "node": ">=22.0.0"
+    },
+    "license": "Apache-2.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Anubhab-Rakshit/midnight-lock"
+    },
+    "keywords": [
+        "midnight",
+        "escrow",
+        "privacy",
+        "zero-knowledge",
+        "zkp",
+        "blockchain"
+    ]
+}
