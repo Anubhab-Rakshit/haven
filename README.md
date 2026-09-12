@@ -281,9 +281,68 @@ npm run lint        # oxlint
 ## 🧪 Demo / Verification
 
 A full end-to-end happy path (deploy → deposit → confirm → release) was verified
-on the **preprod testnet**: each escrow objects a `Deposited → Delivered →
-Released` transition with a persisted on-chain coin index. See
-[`tests/`](tests/) for the circuit-level verification helpers.
+on the **preprod testnet**: each escrow goes through `Deposited → Delivered →
+Released` with a persisted on-chain coin index.
+
+---
+
+## 🚢 Deployment
+
+### Backend — Render
+
+The API server and Midnight proof server are deployed on [Render](https://render.com).
+
+**API Server** (`haven-api`):
+
+| Field | Value |
+|-------|-------|
+| Runtime | Node |
+| Build Command | `npm install && npm run build` |
+| Start Command | `node dist/index.js` |
+| Plan | Free |
+
+**Proof Server** (`haven-proof-server`):
+
+| Field | Value |
+|-------|-------|
+| Runtime | Docker |
+| Dockerfile Path | `Dockerfile.proof-server` |
+| Plan | Free |
+
+**Environment variables** (set in Render Dashboard → Settings → Environment):
+
+| Key | Value |
+|-----|-------|
+| `MIDNIGHT_NETWORK` | `preprod` |
+| `MIDNIGHT_INDEXER_URL` | `https://indexer.preprod.midnight.network/api/v4/graphql` |
+| `MIDNIGHT_INDEXER_WS_URL` | `wss://indexer.preprod.midnight.network/api/v4/graphql/ws` |
+| `MIDNIGHT_NODE_URL` | `https://rpc.preprod.midnight.network` |
+| `MIDNIGHT_WALLET_SEED` | your funded wallet seed (32-byte hex) |
+| `MIDNIGHT_PROOF_SERVER_URL` | `http://haven-proof-server.onrender.com` |
+| `SUPABASE_URL` | your Supabase project URL |
+| `SUPABASE_ANON_KEY` | your Supabase anon key |
+| `NODE_ENV` | `production` |
+
+> Deploy the proof server first, wait for it to go green, then deploy the API server.
+
+### Frontend — Vercel
+
+The React dashboard is deployable to [Vercel](https://vercel.com).
+
+```bash
+# In the frontend/ directory
+cd frontend
+```
+
+**Vercel Dashboard** → Import Git Repository → set:
+
+| Env Variable | Value |
+|-------------|-------|
+| `VITE_API_URL` | `https://haven-api-jce5.onrender.com` |
+| `VITE_SUPABASE_URL` | your Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | your Supabase anon key |
+
+> Build settings: Framework Preset = **Vite**, Root Directory = `frontend`, Build Command = `npm run build`, Output = `dist`.
 
 ---
 
