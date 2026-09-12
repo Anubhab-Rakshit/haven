@@ -1,0 +1,20 @@
+# Haven escrow proof server setup
+# Usage:
+#   docker compose up -d
+#   docker compose down
+
+services:
+  proof-server:
+    image: midnightntwrk/proof-server:latest
+    container_name: haven-proof-server
+    ports:
+      - "6300:6300"
+    environment:
+      # Use preprod network by default
+      MIDNIGHT_NETWORK: preprod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6300"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
