@@ -349,6 +349,7 @@ cd frontend
 
 ## 📊 Presentation
 
+- [YouTube Demo](https://youtu.be/0P_jHy5MmYY)
 - [Google Drive (PDF)](https://drive.google.com/drive/folders/1mEbKVhLZVYf2HLSWu-tRkbF8SKgX4_01?usp=sharing)
 - Local copy: [`Haven_Presentation.pdf`](./Haven_Presentation.pdf)
 
