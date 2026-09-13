@@ -110,7 +110,7 @@ export const EscrowBoard: React.FC = () => {
 
     switch (type) {
       case 'deposit':
-        await deposit(escrow.id);
+        await deposit(escrow.id, escrow.amount);
         break;
       case 'confirmDelivery':
         await confirmDelivery(escrow.id);

@@ -203,7 +203,8 @@ export function useEscrowService(): UseEscrowServiceReturn {
       escrowId: string,
       action: string,
       actionLabel: string,
-      updateFields: Partial<EscrowRecord> = {}
+      updateFields: Partial<EscrowRecord> = {},
+      extraBody?: Record<string, unknown>
     ): Promise<EscrowActionResult> => {
       setIsLoading(true);
       setError(null);
@@ -211,7 +212,7 @@ export function useEscrowService(): UseEscrowServiceReturn {
       try {
         const data = await apiFetch(`/api/escrows/${escrowId}/action`, {
           method: 'POST',
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, ...extraBody }),
         });
 
         const newState = data.newState as unknown as EscrowState;
@@ -265,10 +266,10 @@ export function useEscrowService(): UseEscrowServiceReturn {
   // ─── Escrow Actions ───────────────────────────────────────────────────────
 
   const deposit = useCallback(
-    (escrowId: string) =>
+    (escrowId: string, value?: string | number) =>
       performTransition(escrowId, 'deposit', 'Deposit Funds', {
         fundedAt: new Date().toISOString(),
-      }),
+      }, value !== undefined ? { value } : undefined),
     [performTransition]
   );
 
