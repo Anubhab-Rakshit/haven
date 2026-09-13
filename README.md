@@ -49,6 +49,7 @@ transitions proven with ZK circuits, identities never revealed on-chain.
 - [Configuration](#-configuration)
 - [Testing](#-testing)
 - [Deployment](#-deployment)
+- [Presentation](#-presentation)
 - [Security & Disclaimer](#-security--disclaimer)
 
 ---
@@ -343,6 +344,13 @@ cd frontend
 | `VITE_SUPABASE_ANON_KEY` | your Supabase anon key |
 
 > Build settings: Framework Preset = **Vite**, Root Directory = `frontend`, Build Command = `npm run build`, Output = `dist`.
+
+---
+
+## 📊 Presentation
+
+- [Google Drive (PDF)](https://drive.google.com/drive/folders/1mEbKVhLZVYf2HLSWu-tRkbF8SKgX4_01?usp=sharing)
+- Local copy: [`Haven_Presentation.pdf`](./Haven_Presentation.pdf)
 
 ---
 
