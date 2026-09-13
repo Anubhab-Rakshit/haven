@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🔐 Haven
+<img src="./haven-icon.png" alt="Haven" width="120" />
+
+# Haven
 
 ### Private, Zero-Knowledge Escrow on the Midnight Blockchain
 
