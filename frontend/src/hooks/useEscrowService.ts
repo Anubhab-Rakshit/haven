@@ -31,7 +31,7 @@ export interface UseEscrowServiceReturn {
   transactions: Record<string, EscrowTransaction[]>;
 
   createEscrow: (request: CreateEscrowRequest) => Promise<EscrowDeploymentResult>;
-  deposit: (escrowId: string) => Promise<EscrowActionResult>;
+  deposit: (escrowId: string, value?: string | number) => Promise<EscrowActionResult>;
   confirmDelivery: (escrowId: string) => Promise<EscrowActionResult>;
   release: (escrowId: string) => Promise<EscrowActionResult>;
   dispute: (escrowId: string) => Promise<EscrowActionResult>;
