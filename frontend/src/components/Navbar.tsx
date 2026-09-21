@@ -16,10 +16,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeView,
   setActiveView,
 }) => {
-  const { isConnected, isConnecting, address, shortAddress, connect, disconnect } = useMidnightWallet();
+  const { isConnected, isConnecting, address, shortAddress, connect, disconnect, availableWallets } = useMidnightWallet();
   const [copied, setCopied] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [walletPickerOpen, setWalletPickerOpen] = useState(false);
 
   const copyAddress = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -145,23 +146,104 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Connect / Connected Button (Desktop & Mobile Pill) */}
           <div className="desktop-wallet-pill">
             {!isConnected ? (
-              <Magnetic strength={0.25}>
-                <button
-                  type="button"
-                  className="btn-pill-connect"
-                  onClick={() => connect()}
-                  disabled={isConnecting}
-                >
-                  {isConnecting ? (
-                    <>
-                      <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
-                      <span>CONNECTING</span>
-                    </>
-                  ) : (
-                    <span>CONNECT LACE</span>
+              <div style={{ position: 'relative' }}>
+                <Magnetic strength={0.25}>
+                  <button
+                    type="button"
+                    className="btn-pill-connect"
+                    onClick={() => {
+                      if (availableWallets.length === 1) {
+                        connect(availableWallets[0].id);
+                      } else if (availableWallets.length > 1) {
+                        setWalletPickerOpen((prev) => !prev);
+                      } else {
+                        connect();
+                      }
+                    }}
+                    disabled={isConnecting}
+                  >
+                    {isConnecting ? (
+                      <>
+                        <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} />
+                        <span>CONNECTING</span>
+                      </>
+                    ) : (
+                      <span>{availableWallets.length > 1 ? 'CONNECT WALLET' : 'CONNECT LACE'}</span>
+                    )}
+                  </button>
+                </Magnetic>
+
+                <AnimatePresence>
+                  {walletPickerOpen && availableWallets.length > 1 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                      transition={{ duration: 0.15 }}
+                      style={{
+                        position: 'absolute',
+                        right: 0,
+                        top: 'calc(100% + 8px)',
+                        width: '200px',
+                        background: 'rgba(14, 12, 18, 0.96)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        borderRadius: '6px',
+                        padding: '0.5rem',
+                        backdropFilter: 'blur(24px)',
+                        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.9)',
+                        zIndex: 200,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '8px',
+                          color: 'var(--text-muted)',
+                          letterSpacing: '0.15em',
+                          textTransform: 'uppercase',
+                          padding: '0.25rem 0.5rem 0.4rem',
+                        }}
+                      >
+                        SELECT WALLET
+                      </div>
+                      {availableWallets.map((w) => (
+                        <button
+                          key={w.id}
+                          type="button"
+                          onClick={() => {
+                            setWalletPickerOpen(false);
+                            connect(w.id);
+                          }}
+                          style={{
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.6rem',
+                            padding: '0.5rem 0.5rem',
+                            background: 'none',
+                            border: 'none',
+                            borderRadius: '4px',
+                            color: 'var(--text-primary)',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: '10px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.08em',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                        >
+                          {w.icon && (
+                            <img src={w.icon} alt="" style={{ width: 16, height: 16, borderRadius: 3 }} />
+                          )}
+                          <span>{w.name || w.id}</span>
+                        </button>
+                      ))}
+                    </motion.div>
                   )}
-                </button>
-              </Magnetic>
+                </AnimatePresence>
+              </div>
             ) : (
               <div style={{ position: 'relative' }}>
                 <button
@@ -414,18 +496,41 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
 
               {!isConnected ? (
-                <button
-                  type="button"
-                  className="btn-primary"
-                  onClick={() => {
-                    connect();
-                    setMobileMenuOpen(false);
-                  }}
-                  disabled={isConnecting}
-                  style={{ width: '100%', justifyContent: 'center', padding: '0.65rem' }}
-                >
-                  {isConnecting ? 'CONNECTING...' : 'CONNECT LACE WALLET'}
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {availableWallets.length > 1 ? (
+                    availableWallets.map((w) => (
+                      <button
+                        key={w.id}
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => {
+                          connect(w.id);
+                          setMobileMenuOpen(false);
+                        }}
+                        disabled={isConnecting}
+                        style={{ width: '100%', justifyContent: 'center', padding: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                      >
+                        {w.icon && (
+                          <img src={w.icon} alt="" style={{ width: 14, height: 14, borderRadius: 3 }} />
+                        )}
+                        <span>{isConnecting ? 'CONNECTING...' : `CONNECT ${w.name?.toUpperCase() || w.id.toUpperCase()}`}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => {
+                        connect();
+                        setMobileMenuOpen(false);
+                      }}
+                      disabled={isConnecting}
+                      style={{ width: '100%', justifyContent: 'center', padding: '0.65rem' }}
+                    >
+                      {isConnecting ? 'CONNECTING...' : 'CONNECT WALLET'}
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   <div
