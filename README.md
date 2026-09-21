@@ -41,6 +41,7 @@ transitions proven with ZK circuits, identities never revealed on-chain.
 ## 📑 Contents
 
 - [Features](#-features)
+- [Screenshots](#-screenshots)
 - [How It Works](#-how-it-works)
 - [Privacy Model](#-privacy-model)
 - [State Machine](#-state-machine)
@@ -67,6 +68,21 @@ transitions proven with ZK circuits, identities never revealed on-chain.
 | 🔁 **Restart-safe** | Each deposit's Merkle coin index is persisted, so `release` works after a server restart |
 | 🗄️ **Supabase persistence** | Escrow records, their state, and their on-chain coin index outlive the process |
 | 🖥️ **Frontend dashboard** | Vite + React UI over a typed Express API |
+
+---
+
+## Screenshots
+
+<table>
+<tr>
+<td align="center"><img src="./images/escrow.png" alt="Escrow Board" width="100%" /><br><sub>Escrow Board</sub></td>
+<td align="center"><img src="./images/escrow_details.png" alt="Escrow Details" width="100%" /><br><sub>Escrow Details</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="./images/stats.png" alt="Protocol Stats" width="100%" /><br><sub>Protocol Stats</sub></td>
+<td align="center"><img src="./images/about.png" alt="About Haven" width="100%" /><br><sub>About Haven</sub></td>
+</tr>
+</table>
 
 ---
 
